@@ -1505,6 +1505,13 @@ struct Printer
 
                 visualizeTypeAnnotation(*local->annotation);
             }
+
+            if (AstExpr* defaultValue = func.argsDefaults.data[i])
+            {
+                writer.maybeSpace(defaultValue->location.begin, 2);
+                writer.symbol("=");
+                visualize(*defaultValue);
+            }
         }
 
         if (func.vararg)

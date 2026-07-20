@@ -1152,6 +1152,10 @@ DataFlowResult DataFlowGraphBuilder::visitFunction(AstExprFunction* f, NotNull<D
     if (f->returnAnnotation)
         visitTypePack(f->returnAnnotation);
 
+    for (AstExpr* paramDefault : f->argsDefaults)
+        if (paramDefault)
+            visitExpr(paramDefault);
+
     // TODO: function body can be re-entrant, as in mutations that occurs at the end of the function can also be
     // visible to the beginning of the function, so statically speaking, the body of the function has an exit point
     // that points back to itself, e.g.

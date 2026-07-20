@@ -3993,8 +3993,10 @@ std::pair<TypeId, ScopePtr> TypeChecker::checkFunctionSignature(
         expectedArgsEnd = end(expectedFunctionType->argTypes);
     }
 
-    for (AstLocal* local : expr.args)
+    for (size_t i = 0; i < expr.args.size; i++)
     {
+        AstLocal* local = expr.args.data[i];
+
         TypeId argType = nullptr;
 
         if (local->annotation)
@@ -4005,7 +4007,20 @@ std::pair<TypeId, ScopePtr> TypeChecker::checkFunctionSignature(
             if (get<ErrorType>(follow(argType)))
                 argType = anyIfNonstrict(freshType(funScope));
         }
-        else
+        if (expr.argsDefaults.data[i])
+        {
+            // We have a default value, so infer type from that
+            TypeId defaultArgType = checkExpr(funScope, *expr.argsDefaults.data[i]->asExpr()).type;
+            if (get<ErrorType>(follow(defaultArgType)))
+                defaultArgType = anyIfNonstrict(freshType(funScope));
+
+            if (argType == nullptr)
+                argType = defaultArgType;
+            else
+                unify(defaultArgType, argType, scope, expr.argsDefaults.data[i]->location);
+        }
+
+        if (argType == nullptr)
         {
             if (expectedFunctionType && !isNonstrictMode())
             {
@@ -4025,7 +4040,15 @@ std::pair<TypeId, ScopePtr> TypeChecker::checkFunctionSignature(
         }
 
         funScope->bindings[local] = {argType, local->location};
-        argTypes.push_back(argType);
+
+        if (expr.argsDefaults.data[i])
+        {
+            argTypes.push_back(unionOfTypes(nilType, argType, scope, expr.argsDefaults.data[i]->location));
+        }
+        else
+        {
+            argTypes.push_back(argType);
+        }
 
         if (expectedArgsCurr != expectedArgsEnd)
             ++expectedArgsCurr;
@@ -4223,14 +4246,12 @@ void TypeChecker::checkArgumentList(
             namePath = *path;
 
         auto [minParams, optMaxParams] = getParameterExtents(&state.log, paramPack);
-        state.reportError(
-            TypeError{
-                location,
-                CountMismatch{
-                    minParams, optMaxParams, std::distance(begin(argPack), end(argPack)), CountMismatch::Context::Arg, false, std::move(namePath)
-                }
+        state.reportError(TypeError{
+            location,
+            CountMismatch{
+                minParams, optMaxParams, std::distance(begin(argPack), end(argPack)), CountMismatch::Context::Arg, false, std::move(namePath)
             }
-        );
+        });
     };
 
     while (true)
@@ -4347,12 +4368,10 @@ void TypeChecker::checkArgumentList(
                     if (std::optional<std::string> path = getFunctionNameAsString(funName))
                         namePath = *path;
 
-                    state.reportError(
-                        TypeError{
-                            funName.location,
-                            CountMismatch{minParams, optMaxParams, paramIndex, CountMismatch::Context::Arg, isVariadic, std::move(namePath)}
-                        }
-                    );
+                    state.reportError(TypeError{
+                        funName.location,
+                        CountMismatch{minParams, optMaxParams, paramIndex, CountMismatch::Context::Arg, isVariadic, std::move(namePath)}
+                    });
                     return;
                 }
                 ++paramIter;
@@ -4773,14 +4792,12 @@ std::unique_ptr<WithPredicate<TypePackId>> TypeChecker::checkCallOverload(
         else
             overloadsThatDont.push_back(fn);
 
-        errors.push_back(
-            OverloadErrorEntry{
-                std::move(state.log),
-                std::move(state.errors),
-                args->head,
-                ftv,
-            }
-        );
+        errors.push_back(OverloadErrorEntry{
+            std::move(state.log),
+            std::move(state.errors),
+            args->head,
+            ftv,
+        });
     }
     else
     {

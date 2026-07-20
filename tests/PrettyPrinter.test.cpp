@@ -900,6 +900,23 @@ TEST_CASE("roundtrip_generic_types")
     CHECK_EQ(code, prettyPrintWithTypes(*parseResult.root));
 }
 
+TEST_CASE("roundtrip_function_arg_defaults")
+{
+    const std::string code = R"(
+        local function foo(a:string=1)
+        end
+    )";
+    auto allocator = Allocator{};
+    auto names = AstNameTable{allocator};
+
+    ParseOptions options;
+
+    ParseResult parseResult = Parser::parse(code.data(), code.size(), names, allocator, options);
+    REQUIRE(parseResult.errors.empty());
+
+    CHECK_EQ(code, prettyPrintWithTypes(*parseResult.root));
+}
+
 TEST_CASE_FIXTURE(Fixture, "attach_types")
 {
     const std::string code = R"(

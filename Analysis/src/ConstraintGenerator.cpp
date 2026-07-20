@@ -1140,11 +1140,9 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
 
             TypeId instanceMetatable = arena->addType(TableType{instanceMetatableProps, std::nullopt, TypeLevel{}, scope.get(), TableState::Sealed});
 
-            TypeId classInstanceTy = arena->addType(
-                ExternType{
-                    declName, std::move(props), builtinTypes->objectType, instanceMetatable, Tags{}, nullptr, module->name, classDecl->location
-                }
-            );
+            TypeId classInstanceTy = arena->addType(ExternType{
+                declName, std::move(props), builtinTypes->objectType, instanceMetatable, Tags{}, nullptr, module->name, classDecl->location
+            });
 
             TypeId ctorTy =
                 arena->addType(FunctionType{arena->addTypePack({builtinTypes->unknownType, ctorArgTy}), arena->addTypePack({classInstanceTy})});
@@ -2229,8 +2227,7 @@ ControlFlow ConstraintGenerator::visit(const ScopePtr& scope, AstStatDeclareExte
         {
             reportError(
                 declaredExternType->location,
-                GenericError{
-                    format("Cannot use non-class type '%s' as a superclass of class '%s'", superName.c_str(), declaredExternType->name.value)
+                GenericError{format("Cannot use non-class type '%s' as a superclass of class '%s'", superName.c_str(), declaredExternType->name.value)
                 }
             );
 
@@ -3997,19 +3994,36 @@ ConstraintGenerator::FunctionSignature ConstraintGenerator::checkFunctionSignatu
         AstLocal* local = fn->args.data[i];
 
         TypeId argTy = nullptr;
+        bool hasSpecifiedArgTy = false;
         if (local->annotation)
         {
             argTy = resolveType(signatureScope, local->annotation, /* inTypeArguments */ false, /* replaceErrorWithFresh*/ true, Polarity::Negative);
+            hasSpecifiedArgTy = true;
         }
         else
         {
             if (i < expectedArgPack.head.size())
+            {
                 argTy = expectedArgPack.head[i];
-            else
-                argTy = freshType(signatureScope, Polarity::Negative);
+                hasSpecifiedArgTy = true;
+            }
         }
 
-        argTypes.push_back(argTy);
+        AstExpr* argDefault = fn->argsDefaults.data[i];
+        if (argDefault)
+        {
+            Inference found = check(signatureScope, argDefault, argTy);
+
+            if (hasSpecifiedArgTy)
+                addConstraint(signatureScope, argDefault->location, SubtypeConstraint{found.ty, argTy});
+            else
+                argTy = found.ty;
+        }
+
+        if (!argTy)
+            argTy = freshType(signatureScope, Polarity::Negative);
+
+        argTypes.push_back(argDefault ? makeUnion(signatureScope, argDefault->location, builtinTypes->nilType, argTy) : argTy);
         argNames.emplace_back(FunctionArgument{local->name.value, local->location});
 
         signatureScope->bindings[local] = Binding{argTy, local->location};
