@@ -790,7 +790,7 @@ AstStat* Parser::parseFor()
             {
                 Position initialCommaPosition = lexer.current().location.begin;
                 nextLexeme();
-                parseBindingList(names, false, &varsCommaPosition, &initialCommaPosition);
+                parseBindingList(names, false, false, &varsCommaPosition, &initialCommaPosition);
             }
             else
             {
@@ -1166,8 +1166,7 @@ void Parser::parseAttribute_DEPRECATED(TempVector<AstAttr*>& attributes)
             report(Location(open.location, lexer.current().location), "Attribute list cannot be empty");
 
             // autocomplete expects at least one unknown attribute.
-            attributes.push_back(
-                allocator.alloc<AstAttr>(Location(open.location, lexer.current().location), AstAttr::Type::Unknown, empty, nameError)
+            attributes.push_back(allocator.alloc<AstAttr>(Location(open.location, lexer.current().location), AstAttr::Type::Unknown, empty, nameError)
             );
         }
 
@@ -1403,9 +1402,9 @@ AstStat* Parser::parseLocal(
         TempVector<Binding> names(scratchBinding);
         AstArray<Position> varsCommaPositions;
         if (options.storeCstData)
-            parseBindingList(names, false, &varsCommaPositions, nullptr, nullptr, isConst);
+            parseBindingList(names, false, false, &varsCommaPositions, nullptr, nullptr, isConst);
         else
-            parseBindingList(names, false, nullptr, nullptr, nullptr, isConst);
+            parseBindingList(names, false, false, nullptr, nullptr, nullptr, isConst);
 
         matchRecoveryStopOnToken['=']--;
 
@@ -1626,15 +1625,13 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
 
                 // Either both of these are present or neither are.
                 LUAU_ASSERT((bool)propType == (bool)typeColonLocation);
-                declarations.push_back(
-                    AstClassProperty{
-                        *qualifierLocation,
-                        propName->name,
-                        propName->location,
-                        typeColonLocation,
-                        propType,
-                    }
-                );
+                declarations.push_back(AstClassProperty{
+                    *qualifierLocation,
+                    propName->name,
+                    propName->location,
+                    typeColonLocation,
+                    propType,
+                });
             }
         }
         else if (lexer.current().type == Lexeme::ReservedFunction)
@@ -1682,15 +1679,13 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
             {
                 classMemberNamespace.insert(name.name);
 
-                declarations.push_back(
-                    AstClassMethod{
-                        qualifierLocation,
-                        matchFunction.location,
-                        name.name,
-                        name.location,
-                        body,
-                    }
-                );
+                declarations.push_back(AstClassMethod{
+                    qualifierLocation,
+                    matchFunction.location,
+                    name.name,
+                    name.location,
+                    body,
+                });
             }
         }
         else
@@ -1786,7 +1781,7 @@ AstDeclaredExternTypeProperty Parser::parseDeclaredExternTypeMethod(const AstArr
     Location varargLocation;
     AstTypePack* varargAnnotation = nullptr;
     if (lexer.current().type != ')')
-        std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3 */ true);
+        std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3 */ true, /* allowDefault= */ true);
 
     expectMatchAndConsume(')', matchParen);
 
@@ -1857,7 +1852,7 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
         AstTypePack* varargAnnotation = nullptr;
 
         if (lexer.current().type != ')')
-            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true);
+            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ true);
 
         expectMatchAndConsume(')', matchParen);
 
@@ -1989,11 +1984,9 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
 
                     if (chars && !containsNull)
                     {
-                        props.push_back(
-                            AstDeclaredExternTypeProperty{
-                                AstName(chars->data), Location(nameBegin, nameEnd), type, false, Location(begin.location, lexer.previousLocation())
-                            }
-                        );
+                        props.push_back(AstDeclaredExternTypeProperty{
+                            AstName(chars->data), Location(nameBegin, nameEnd), type, false, Location(begin.location, lexer.previousLocation())
+                        });
                     }
                     else
                     {
@@ -2045,11 +2038,9 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
 
                 expectAndConsume(':', "property type annotation");
                 AstType* propType = parseType();
-                props.push_back(
-                    AstDeclaredExternTypeProperty{
-                        propName->name, propName->location, propType, false, Location(propStart, lexer.previousLocation()), access
-                    }
-                );
+                props.push_back(AstDeclaredExternTypeProperty{
+                    propName->name, propName->location, propType, false, Location(propStart, lexer.previousLocation()), access
+                });
             }
         }
 
@@ -2260,7 +2251,11 @@ AstStat* Parser::parseCompoundAssignment(AstExpr* initial, AstExprBinary::Op op)
     return node;
 }
 
-std::pair<AstLocal*, AstArray<AstLocal*>> Parser::prepareFunctionArguments(const Location& start, bool hasself, const TempVector<Binding>& args)
+std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> Parser::prepareFunctionArguments(
+    const Location& start,
+    bool hasself,
+    const TempVector<Binding>& args
+)
 {
     AstLocal* self = nullptr;
 
@@ -2268,11 +2263,15 @@ std::pair<AstLocal*, AstArray<AstLocal*>> Parser::prepareFunctionArguments(const
         self = pushLocal(Binding(Name(nameSelf, start), nullptr));
 
     TempVector<AstLocal*> vars(scratchLocal);
+    TempVector<AstExpr*> varsDefaults(scratchExpr);
 
     for (size_t i = 0; i < args.size(); ++i)
+    {
         vars.push_back(pushLocal(args[i]));
+        varsDefaults.push_back(args[i].defaultValue);
+    }
 
-    return {self, copy(vars)};
+    return {self, copy(vars), copy(varsDefaults)};
 }
 
 // funcbody ::= `(' [parlist] `)' [`:' ReturnType] block end
@@ -2330,10 +2329,11 @@ std::pair<AstExprFunction*, AstLocal*> Parser::parseFunctionBody(
     if (lexer.current().type != ')')
     {
         if (cstNode)
-            std::tie(vararg, varargLocation, varargAnnotation) =
-                parseBindingList(args, /* allowDot3= */ true, &cstNode->argsCommaPositions, nullptr, &cstNode->varargAnnotationColonPosition);
+            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(
+                args, /* allowDot3= */ true, /* allowDefault= */ true, &cstNode->argsCommaPositions, nullptr, &cstNode->varargAnnotationColonPosition
+            );
         else
-            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true);
+            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ true);
     }
 
     std::optional<Location> argLocation;
@@ -2361,7 +2361,7 @@ std::pair<AstExprFunction*, AstLocal*> Parser::parseFunctionBody(
 
     functionStack.emplace_back(fun);
 
-    auto [self, vars] = prepareFunctionArguments(start, hasself, args);
+    auto [self, vars, varsDefaults] = prepareFunctionArguments(start, hasself, args);
 
     AstStatBlock* body = parseBlock();
 
@@ -2381,6 +2381,7 @@ std::pair<AstExprFunction*, AstLocal*> Parser::parseFunctionBody(
         genericPacks,
         self,
         vars,
+        varsDefaults,
         vararg,
         varargLocation,
         body,
@@ -2421,7 +2422,7 @@ void Parser::parseExprList(TempVector<AstExpr*>& result, TempVector<Position>* c
     }
 }
 
-Parser::Binding Parser::parseBinding(bool isConst)
+Parser::Binding Parser::parseBinding(bool isConst, bool allowDefault)
 {
     std::optional<Name> name = parseNameOpt("variable name");
 
@@ -2432,10 +2433,22 @@ Parser::Binding Parser::parseBinding(bool isConst)
     Position colonPosition = lexer.current().type == ':' ? lexer.current().location.begin : Position::missing();
     AstType* annotation = parseOptionalType();
 
+    AstExpr* defaultValue = nullptr;
+    if (allowDefault && lexer.current().type == '=')
+    {
+        nextLexeme();
+        static Function dummy_fun;
+        functionStack.emplace_back(dummy_fun);
+
+        defaultValue = parseExpr();
+
+        functionStack.pop_back();
+    }
+
     if (options.storeCstData)
-        return Binding(*name, annotation, colonPosition, isConst);
+        return Binding(*name, annotation, colonPosition, isConst, defaultValue);
     else
-        return Binding(*name, annotation, Position::missing(), isConst);
+        return Binding(*name, annotation, Position::missing(), isConst, defaultValue);
 }
 
 AstArray<Position> Parser::extractAnnotationColonPositions(const TempVector<Binding>& bindings)
@@ -2450,6 +2463,7 @@ AstArray<Position> Parser::extractAnnotationColonPositions(const TempVector<Bind
 LUAU_NOINLINE std::tuple<bool, Location, AstTypePack*> Parser::parseBindingList(
     TempVector<Binding>& result,
     bool allowDot3,
+    bool allowDefault,
     AstArray<Position>* commaPositions,
     Position* initialCommaPosition,
     Position* varargAnnotationColonPosition,
@@ -2484,7 +2498,7 @@ LUAU_NOINLINE std::tuple<bool, Location, AstTypePack*> Parser::parseBindingList(
             return {true, varargLocation, tailAnnotation};
         }
 
-        result.push_back(parseBinding(isConst));
+        result.push_back(parseBinding(isConst, allowDefault));
 
         if (lexer.current().type != ',')
             break;
@@ -2832,18 +2846,16 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
                     if (options.storeCstData)
                     {
                         CstExprTable::Separator separator = tableSeparator();
-                        cstItems.push_back(
-                            CstTypeTable::Item{
-                                CstTypeTable::Item::Kind::StringProperty,
-                                begin.location.begin,
-                                indexerClosePosition,
-                                colonPosition,
-                                separator,
-                                separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                                allocator.alloc<CstExprConstantString>(sourceString, style, blockDepth),
-                                stringPosition
-                            }
-                        );
+                        cstItems.push_back(CstTypeTable::Item{
+                            CstTypeTable::Item::Kind::StringProperty,
+                            begin.location.begin,
+                            indexerClosePosition,
+                            colonPosition,
+                            separator,
+                            separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                            allocator.alloc<CstExprConstantString>(sourceString, style, blockDepth),
+                            stringPosition
+                        });
                     }
                 }
                 else
@@ -2867,16 +2879,14 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
                     if (options.storeCstData)
                     {
                         CstExprTable::Separator separator = tableSeparator();
-                        cstItems.push_back(
-                            CstTypeTable::Item{
-                                CstTypeTable::Item::Kind::Indexer,
-                                tableIndexerResult.indexerOpenPosition,
-                                tableIndexerResult.indexerClosePosition,
-                                tableIndexerResult.colonPosition,
-                                separator,
-                                separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                            }
-                        );
+                        cstItems.push_back(CstTypeTable::Item{
+                            CstTypeTable::Item::Kind::Indexer,
+                            tableIndexerResult.indexerOpenPosition,
+                            tableIndexerResult.indexerClosePosition,
+                            tableIndexerResult.colonPosition,
+                            separator,
+                            separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                        });
                     }
                 }
             }
@@ -2908,16 +2918,14 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
             if (options.storeCstData)
             {
                 CstExprTable::Separator separator = tableSeparator();
-                cstItems.push_back(
-                    CstTypeTable::Item{
-                        CstTypeTable::Item::Kind::Property,
-                        Position::missing(),
-                        Position::missing(),
-                        colonPosition,
-                        separator,
-                        separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                    }
-                );
+                cstItems.push_back(CstTypeTable::Item{
+                    CstTypeTable::Item::Kind::Property,
+                    Position::missing(),
+                    Position::missing(),
+                    colonPosition,
+                    separator,
+                    separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                });
             }
         }
 
@@ -3390,8 +3398,9 @@ AstTypeOrPack Parser::parseSimpleType(bool allowPack, bool inDeclarationContext)
 
         Location end = lexer.previousLocation();
 
-        AstTypeReference* node =
-            allocator.alloc<AstTypeReference>(Location(start, end), prefix, name.name, prefixLocation, name.location, hasParameters, parameters, prefixLocal);
+        AstTypeReference* node = allocator.alloc<AstTypeReference>(
+            Location(start, end), prefix, name.name, prefixLocation, name.location, hasParameters, parameters, prefixLocal
+        );
         if (options.storeCstData)
             cstNodeMap[node] = allocator.alloc<CstTypeReference>(
                 prefixPointPosition, parametersOpeningPosition, copy(parametersCommaPositions), parametersClosingPosition

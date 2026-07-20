@@ -218,7 +218,11 @@ private:
     // var [`+=' | `-=' | `*=' | `/=' | `%=' | `^=' | `..='] exp
     AstStat* parseCompoundAssignment(AstExpr* initial, AstExprBinary::Op op);
 
-    std::pair<AstLocal*, AstArray<AstLocal*>> prepareFunctionArguments(const Location& start, bool hasself, const TempVector<Binding>& args);
+    std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> prepareFunctionArguments(
+        const Location& start,
+        bool hasself,
+        const TempVector<Binding>& args
+    );
 
     // funcbodyhead ::= `(' [namelist [`,' `...'] | `...'] `)' [`:` Type]
     // funcbody ::= funcbodyhead block end
@@ -235,8 +239,8 @@ private:
     // explist ::= {exp `,'} exp
     void parseExprList(TempVector<AstExpr*>& result, TempVector<Position>* commaPositions = nullptr);
 
-    // binding ::= Name [`:` Type]
-    Binding parseBinding(bool isConst = false);
+    // binding ::= Name [`:` Type] [`=` Default]
+    Binding parseBinding(bool isConst = false, bool allowDefault = false);
     AstArray<Position> extractAnnotationColonPositions(const TempVector<Binding>& bindings);
 
     // bindinglist ::= (binding | `...') {`,' bindinglist}
@@ -244,6 +248,7 @@ private:
     std::tuple<bool, Location, AstTypePack*> parseBindingList(
         TempVector<Binding>& result,
         bool allowDot3 = false,
+        bool allowDefault = false,
         AstArray<Position>* commaPositions = nullptr,
         Position* initialCommaPosition = nullptr,
         Position* varargAnnotationColonPosition = nullptr,
@@ -454,12 +459,8 @@ private:
     // `astErrorLocation` is associated with the AstTypeError created
     // It can be useful to have different error locations so that the parse error can include the next lexeme, while the AstTypeError can precisely
     // define the location (possibly of zero size) where a type annotation is expected.
-    AstTypeError* reportMissingTypeError(
-        const Location& parseErrorLocation,
-        const Location& astErrorLocation,
-        const char* format,
-        ...
-    ) LUAU_PRINTF_ATTR(4, 5);
+    AstTypeError* reportMissingTypeError(const Location& parseErrorLocation, const Location& astErrorLocation, const char* format, ...)
+        LUAU_PRINTF_ATTR(4, 5);
 
     AstExpr* reportFunctionArgsError(AstExpr* func, bool self);
     void reportAmbiguousCallError();
@@ -508,12 +509,20 @@ private:
         AstType* annotation;
         Position colonPosition;
         bool isConst;
+        AstExpr* defaultValue;
 
-        explicit Binding(const Name& name, AstType* annotation = nullptr, Position colonPosition = {0, 0}, bool isConst = false)
+        explicit Binding(
+            const Name& name,
+            AstType* annotation = nullptr,
+            Position colonPosition = {0, 0},
+            bool isConst = false,
+            AstExpr* defaultValue = nullptr
+        )
             : name(name)
             , annotation(annotation)
             , colonPosition(colonPosition)
             , isConst(isConst)
+            , defaultValue(defaultValue)
         {
         }
     };

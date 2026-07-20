@@ -307,6 +307,7 @@ AstExprFunction::AstExprFunction(
     const AstArray<AstGenericTypePack*>& genericPacks,
     AstLocal* self,
     const AstArray<AstLocal*>& args,
+    const AstArray<AstExpr*>& argsDefaults,
     bool vararg,
     const Location& varargLocation,
     AstStatBlock* body,
@@ -322,6 +323,7 @@ AstExprFunction::AstExprFunction(
     , genericPacks(genericPacks)
     , self(self)
     , args(args)
+    , argsDefaults(argsDefaults)
     , returnAnnotation(returnAnnotation)
     , vararg(vararg)
     , varargLocation(varargLocation)

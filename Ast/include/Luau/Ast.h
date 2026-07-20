@@ -521,6 +521,7 @@ public:
         const AstArray<AstGenericTypePack*>& genericPacks,
         AstLocal* self,
         const AstArray<AstLocal*>& args,
+        const AstArray<AstExpr*>& argsDefaults,
         bool vararg,
         const Location& varargLocation,
         AstStatBlock* body,
@@ -542,6 +543,7 @@ public:
     AstArray<AstGenericTypePack*> genericPacks;
     AstLocal* self;
     AstArray<AstLocal*> args;
+    AstArray<AstExpr*> argsDefaults;
     AstTypePack* returnAnnotation = nullptr;
     bool vararg = false;
     Location varargLocation;
