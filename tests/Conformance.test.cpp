@@ -4760,4 +4760,9 @@ TEST_CASE("CodegenRandomizeFunctionalCorrectness")
     CHECK(lua_tonumber(L, -1) == 42.0);
 }
 
+TEST_CASE("DefaultArguments")
+{
+    runConformance("defaultarg.lua");
+}
+
 TEST_SUITE_END();
