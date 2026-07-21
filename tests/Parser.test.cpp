@@ -2173,7 +2173,7 @@ TEST_CASE_FIXTURE(Fixture, "default_arguments_are_not_allowed_in_declarations")
                 function bar(self, x: number = 1)
             end
         )",
-        "Expected ')' (to close '(' at line 3), got '='"
+        "Expected ')' (to close '(' at column 29), got '='"
     );
 }
 
