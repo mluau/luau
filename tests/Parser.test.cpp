@@ -23,7 +23,7 @@ LUAU_FASTFLAG(LuauIntegerType2)
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
 LUAU_FASTFLAG(LuauAllowGlobalDeclarationToBeCalledClass)
 LUAU_FASTFLAG(LuauTrackPrefixLocal)
-LUAU_FASTFLAG(DebugLuauDefaultArguments)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 LUAU_FASTFLAG(LuauNoDuplicateBinaryPrefix)
 
@@ -2157,14 +2157,14 @@ TEST_CASE_FIXTURE(Fixture, "default_arguments_are_gated")
 {
     matchParseError("local function foo(x = 1) end", "Expected ')' (to close '(' at column 19), got '='");
 
-    ScopedFastFlag sff{FFlag::DebugLuauDefaultArguments, true};
+    ScopedFastFlag sff{FFlag::LuauDefaultArguments, true};
 
     parse("local function foo(x = 1) end");
 }
 
 TEST_CASE_FIXTURE(Fixture, "default_arguments_are_not_allowed_in_declarations")
 {
-    ScopedFastFlag sff{FFlag::DebugLuauDefaultArguments, true};
+    ScopedFastFlag sff{FFlag::LuauDefaultArguments, true};
 
     matchParseError("declare function foo(x: number = 1)", "Expected ')' (to close '(' at column 21), got '='");
     matchParseError(

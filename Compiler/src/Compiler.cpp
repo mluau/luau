@@ -34,6 +34,7 @@ LUAU_FASTFLAG(LuauIntegerType2)
 LUAU_FASTFLAGVARIABLE(LuauCompileStringInterpTargetTop)
 LUAU_FASTFLAG(DebugLuauNoInline)
 LUAU_FASTFLAGVARIABLE(LuauEmitCallFeedback)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 namespace Luau
 {
@@ -439,7 +440,8 @@ struct Compiler
 
         argCount = localStack.size();
 
-        compileFunctionArgDefaults(func);
+        if (FFlag::LuauDefaultArguments)
+            compileFunctionArgDefaults(func);
 
         AstStatBlock* stat = func->body;
 
@@ -981,12 +983,15 @@ struct Compiler
         args.reserve(func->args.size);
 
         bool hasArgDefaults = false;
-        for (AstExpr* defaultValue : func->argsDefaults)
+        if (FFlag::LuauDefaultArguments)
         {
-            if (defaultValue)
+            for (AstExpr* defaultValue : func->argsDefaults)
             {
-                hasArgDefaults = true;
-                break;
+                if (defaultValue)
+                {
+                    hasArgDefaults = true;
+                    break;
+                }
             }
         }
 
@@ -1096,7 +1101,8 @@ struct Compiler
         // the inline frame will be used to compile return statements as well as to reject recursive inlining attempts
         inlineFrames.push_back({func, oldLocals, target, targetCount});
 
-        compileFunctionArgDefaults(func);
+        if (FFlag::LuauDefaultArguments)
+            compileFunctionArgDefaults(func);
 
         // this pass tracks which calls are builtins and can be compiled more efficiently
         analyzeBuiltins(inlineBuiltins, globals, variables, options, func->body, names);

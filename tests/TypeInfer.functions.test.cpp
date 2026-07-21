@@ -25,7 +25,7 @@ LUAU_FASTFLAG(LuauBidirectionalInferenceVariadics)
 LUAU_FASTFLAG(LuauBidirectionalInferenceBetterLambdaHandling)
 LUAU_FASTFLAG(LuauHigherOrderGenericInference)
 LUAU_FASTFLAG(LuauCollapseDirectBoundCycles)
-LUAU_FASTFLAG(DebugLuauDefaultArguments)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 TEST_SUITE_BEGIN("TypeInferFunctions");
 
@@ -121,15 +121,14 @@ TEST_CASE_FIXTURE(Fixture, "cannot_hoist_interior_defns_into_signature")
 
     LUAU_REQUIRE_ERROR_COUNT(1, result);
     CHECK(
-        result.errors[0] ==
-        TypeError{
-            Location{{1, 28}, {1, 29}},
-            getMainSourceModule()->name,
-            UnknownSymbol{
-                "T",
-                UnknownSymbol::Context::Type,
-            }
-        }
+        result.errors[0] == TypeError{
+                                Location{{1, 28}, {1, 29}},
+                                getMainSourceModule()->name,
+                                UnknownSymbol{
+                                    "T",
+                                    UnknownSymbol::Context::Type,
+                                }
+                            }
     );
 }
 
@@ -4374,7 +4373,7 @@ TEST_CASE_FIXTURE(Fixture, "default_argument_infers_parameter_type")
 {
     ScopedFastFlag sffs[] = {
         {FFlag::DebugLuauForceOldSolver, false},
-        {FFlag::DebugLuauDefaultArguments, true},
+        {FFlag::LuauDefaultArguments, true},
     };
 
     CheckResult result = check(R"(
@@ -4391,7 +4390,7 @@ TEST_CASE_FIXTURE(Fixture, "default_argument_is_checked_against_parameter_annota
 {
     ScopedFastFlag sffs[] = {
         {FFlag::DebugLuauForceOldSolver, false},
-        {FFlag::DebugLuauDefaultArguments, true},
+        {FFlag::LuauDefaultArguments, true},
     };
 
     CheckResult result = check(R"(

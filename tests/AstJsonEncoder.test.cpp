@@ -13,14 +13,14 @@ using namespace Luau;
 
 
 LUAU_FASTFLAG(LuauDisallowExternClassInTypeDefinitions)
-LUAU_FASTFLAG(DebugLuauDefaultArguments)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 struct JsonEncoderFixture
 {
     Allocator allocator;
     AstNameTable names{allocator};
     ScopedFastFlag sff{FFlag::LuauDisallowExternClassInTypeDefinitions, true};
-    ScopedFastFlag sffDefaultArguments{FFlag::DebugLuauDefaultArguments, true};
+    ScopedFastFlag sffDefaultArguments{FFlag::LuauDefaultArguments, true};
 
     ParseResult parse(std::string_view src)
     {

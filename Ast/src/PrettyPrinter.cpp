@@ -14,6 +14,7 @@ LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
 LUAU_FASTFLAG(LuauExportValueSyntax)
 
 LUAU_FASTFLAG(LuauCstAttr)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 namespace
 {
@@ -1506,11 +1507,14 @@ struct Printer
                 visualizeTypeAnnotation(*local->annotation);
             }
 
-            if (AstExpr* defaultValue = func.argsDefaults.data[i])
+            if (FFlag::LuauDefaultArguments)
             {
-                writer.maybeSpace(defaultValue->location.begin, 2);
-                writer.symbol("=");
-                visualize(*defaultValue);
+                if (AstExpr* defaultValue = func.argsDefaults.data[i])
+                {
+                    writer.maybeSpace(defaultValue->location.begin, 2);
+                    writer.symbol("=");
+                    visualize(*defaultValue);
+                }
             }
         }
 

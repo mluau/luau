@@ -34,7 +34,7 @@ LUAU_FASTFLAGVARIABLE(LuauCstAttr)
 LUAU_FASTFLAGVARIABLE(LuauStoreConstKeywordBegin)
 LUAU_FASTFLAGVARIABLE(LuauNoDuplicateBinaryPrefix)
 LUAU_FASTFLAGVARIABLE(LuauTrackPrefixLocal)
-LUAU_FASTFLAGVARIABLE(DebugLuauDefaultArguments)
+LUAU_FASTFLAGVARIABLE(LuauDefaultArguments)
 
 // Clip with DebugLuauReportReturnTypeVariadicWithTypeSuffix
 bool luau_telemetry_parsed_return_type_variadic_with_type_suffix = false;
@@ -1167,7 +1167,8 @@ void Parser::parseAttribute_DEPRECATED(TempVector<AstAttr*>& attributes)
             report(Location(open.location, lexer.current().location), "Attribute list cannot be empty");
 
             // autocomplete expects at least one unknown attribute.
-            attributes.push_back(allocator.alloc<AstAttr>(Location(open.location, lexer.current().location), AstAttr::Type::Unknown, empty, nameError)
+            attributes.push_back(
+                allocator.alloc<AstAttr>(Location(open.location, lexer.current().location), AstAttr::Type::Unknown, empty, nameError)
             );
         }
 
@@ -1626,13 +1627,16 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
 
                 // Either both of these are present or neither are.
                 LUAU_ASSERT((bool)propType == (bool)typeColonLocation);
-                declarations.push_back(AstClassProperty{
-                    *qualifierLocation,
-                    propName->name,
-                    propName->location,
-                    typeColonLocation,
-                    propType,
-                });
+                declarations.push_back(
+                    AstClassProperty
+                    {
+                        *qualifierLocation,
+                        propName->name,
+                        propName->location,
+                        typeColonLocation,
+                        propType,
+                    }
+                );
             }
         }
         else if (lexer.current().type == Lexeme::ReservedFunction)
@@ -1680,13 +1684,16 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
             {
                 classMemberNamespace.insert(name.name);
 
-                declarations.push_back(AstClassMethod{
-                    qualifierLocation,
-                    matchFunction.location,
-                    name.name,
-                    name.location,
-                    body,
-                });
+                declarations.push_back(
+                    AstClassMethod
+                    {
+                        qualifierLocation,
+                        matchFunction.location,
+                        name.name,
+                        name.location,
+                        body,
+                    }
+                );
             }
         }
         else
@@ -1985,9 +1992,11 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
 
                     if (chars && !containsNull)
                     {
-                        props.push_back(AstDeclaredExternTypeProperty{
-                            AstName(chars->data), Location(nameBegin, nameEnd), type, false, Location(begin.location, lexer.previousLocation())
-                        });
+                        props.push_back(AstDeclaredExternTypeProperty
+                            {
+                                AstName(chars->data), Location(nameBegin, nameEnd), type, false, Location(begin.location, lexer.previousLocation())
+                            }
+                        );
                     }
                     else
                     {
@@ -2039,9 +2048,11 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
 
                 expectAndConsume(':', "property type annotation");
                 AstType* propType = parseType();
-                props.push_back(AstDeclaredExternTypeProperty{
-                    propName->name, propName->location, propType, false, Location(propStart, lexer.previousLocation()), access
-                });
+                props.push_back(
+                    AstDeclaredExternTypeProperty{
+                        propName->name, propName->location, propType, false, Location(propStart, lexer.previousLocation()), access
+                    }
+                );
             }
         }
 
@@ -2252,11 +2263,7 @@ AstStat* Parser::parseCompoundAssignment(AstExpr* initial, AstExprBinary::Op op)
     return node;
 }
 
-std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> Parser::prepareFunctionArguments(
-    const Location& start,
-    bool hasself,
-    const TempVector<Binding>& args
-)
+std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> Parser::prepareFunctionArguments(const Location& start, bool hasself, const TempVector<Binding>& args)
 {
     AstLocal* self = nullptr;
 
@@ -2333,14 +2340,14 @@ std::pair<AstExprFunction*, AstLocal*> Parser::parseFunctionBody(
             std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(
                 args,
                 /* allowDot3= */ true,
-                /* allowDefault= */ FFlag::DebugLuauDefaultArguments,
+                /* allowDefault= */ FFlag::LuauDefaultArguments,
                 &cstNode->argsCommaPositions,
                 nullptr,
                 &cstNode->varargAnnotationColonPosition
             );
         else
             std::tie(vararg, varargLocation, varargAnnotation) =
-                parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ FFlag::DebugLuauDefaultArguments);
+                parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ FFlag::LuauDefaultArguments);
     }
 
     std::optional<Location> argLocation;
@@ -2444,8 +2451,14 @@ Parser::Binding Parser::parseBinding(bool isConst, bool allowDefault)
     if (allowDefault && lexer.current().type == '=')
     {
         nextLexeme();
-        static Function dummy_fun;
-        functionStack.emplace_back(dummy_fun);
+        // The depth of functionStack is used to determine the scoping for a local
+        // The expressions for default arguments need scoped to the function body, not the parent
+        // scope
+        // We can't access the Function for the body, because that gets constructed during a later
+        // parse step. A dummy function is safe to use here, as code only inspects .vararg and ...
+        // is not legal in a default argument expression.
+        static Function dummyFunction;
+        functionStack.emplace_back(dummyFunction);
 
         defaultValue = parseExpr();
 
@@ -2853,16 +2866,18 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
                     if (options.storeCstData)
                     {
                         CstExprTable::Separator separator = tableSeparator();
-                        cstItems.push_back(CstTypeTable::Item{
-                            CstTypeTable::Item::Kind::StringProperty,
-                            begin.location.begin,
-                            indexerClosePosition,
-                            colonPosition,
-                            separator,
-                            separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                            allocator.alloc<CstExprConstantString>(sourceString, style, blockDepth),
-                            stringPosition
-                        });
+                        cstItems.push_back(
+                            CstTypeTable::Item{
+                                CstTypeTable::Item::Kind::StringProperty,
+                                begin.location.begin,
+                                indexerClosePosition,
+                                colonPosition,
+                                separator,
+                                separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                                allocator.alloc<CstExprConstantString>(sourceString, style, blockDepth),
+                                stringPosition
+                            }
+                        );
                     }
                 }
                 else
@@ -2886,14 +2901,16 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
                     if (options.storeCstData)
                     {
                         CstExprTable::Separator separator = tableSeparator();
-                        cstItems.push_back(CstTypeTable::Item{
-                            CstTypeTable::Item::Kind::Indexer,
-                            tableIndexerResult.indexerOpenPosition,
-                            tableIndexerResult.indexerClosePosition,
-                            tableIndexerResult.colonPosition,
-                            separator,
-                            separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                        });
+                        cstItems.push_back(
+                            CstTypeTable::Item{
+                                CstTypeTable::Item::Kind::Indexer,
+                                tableIndexerResult.indexerOpenPosition,
+                                tableIndexerResult.indexerClosePosition,
+                                tableIndexerResult.colonPosition,
+                                separator,
+                                separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                            }
+                        );
                     }
                 }
             }
@@ -2925,14 +2942,16 @@ AstType* Parser::parseTableType(bool inDeclarationContext)
             if (options.storeCstData)
             {
                 CstExprTable::Separator separator = tableSeparator();
-                cstItems.push_back(CstTypeTable::Item{
-                    CstTypeTable::Item::Kind::Property,
-                    Position::missing(),
-                    Position::missing(),
-                    colonPosition,
-                    separator,
-                    separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
-                });
+                cstItems.push_back(
+                    CstTypeTable::Item{
+                        CstTypeTable::Item::Kind::Property,
+                        Position::missing(),
+                        Position::missing(),
+                        colonPosition,
+                        separator,
+                        separator != CstExprTable::Separator::Missing ? lexer.current().location.begin : Position::missing(),
+                    }
+                );
             }
         }
 
@@ -3405,9 +3424,8 @@ AstTypeOrPack Parser::parseSimpleType(bool allowPack, bool inDeclarationContext)
 
         Location end = lexer.previousLocation();
 
-        AstTypeReference* node = allocator.alloc<AstTypeReference>(
-            Location(start, end), prefix, name.name, prefixLocation, name.location, hasParameters, parameters, prefixLocal
-        );
+        AstTypeReference* node =
+            allocator.alloc<AstTypeReference>(Location(start, end), prefix, name.name, prefixLocation, name.location, hasParameters, parameters, prefixLocal);
         if (options.storeCstData)
             cstNodeMap[node] = allocator.alloc<CstTypeReference>(
                 prefixPointPosition, parametersOpeningPosition, copy(parametersCommaPositions), parametersClosingPosition

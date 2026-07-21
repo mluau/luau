@@ -12,6 +12,8 @@
 
 #include <algorithm>
 
+LUAU_FASTFLAGVARIABLE(LuauDefaultArguments)
+
 namespace Luau
 {
 
@@ -457,10 +459,13 @@ struct FindExprOrLocal : public AstVisitor
         {
             visitLocal(fn->args.data[i]);
         }
-        for (auto arg : fn->argsDefaults)
+        if (FFlag::LuauDefaultArguments)
         {
-            if (arg)
-                visit(arg);
+            for (auto arg : fn->argsDefaults)
+            {
+                if (arg)
+                    visit(arg);
+            }
         }
         return visit((class AstExpr*)fn);
     }

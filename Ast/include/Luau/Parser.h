@@ -218,11 +218,7 @@ private:
     // var [`+=' | `-=' | `*=' | `/=' | `%=' | `^=' | `..='] exp
     AstStat* parseCompoundAssignment(AstExpr* initial, AstExprBinary::Op op);
 
-    std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> prepareFunctionArguments(
-        const Location& start,
-        bool hasself,
-        const TempVector<Binding>& args
-    );
+    std::tuple<AstLocal*, AstArray<AstLocal*>, AstArray<AstExpr*>> prepareFunctionArguments(const Location& start, bool hasself, const TempVector<Binding>& args);
 
     // funcbodyhead ::= `(' [namelist [`,' `...'] | `...'] `)' [`:` Type]
     // funcbody ::= funcbodyhead block end
@@ -459,8 +455,12 @@ private:
     // `astErrorLocation` is associated with the AstTypeError created
     // It can be useful to have different error locations so that the parse error can include the next lexeme, while the AstTypeError can precisely
     // define the location (possibly of zero size) where a type annotation is expected.
-    AstTypeError* reportMissingTypeError(const Location& parseErrorLocation, const Location& astErrorLocation, const char* format, ...)
-        LUAU_PRINTF_ATTR(4, 5);
+    AstTypeError* reportMissingTypeError(
+        const Location& parseErrorLocation,
+        const Location& astErrorLocation,
+        const char* format,
+        ...
+    ) LUAU_PRINTF_ATTR(4, 5);
 
     AstExpr* reportFunctionArgsError(AstExpr* func, bool self);
     void reportAmbiguousCallError();

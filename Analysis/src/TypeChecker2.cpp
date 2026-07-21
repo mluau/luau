@@ -42,6 +42,7 @@ LUAU_FASTFLAG(LuauImproveUniqueTableWidthSubtyping)
 LUAU_FASTFLAG(LuauBidirectionalInferenceSimplifyTables)
 
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 namespace Luau
 {
@@ -2077,11 +2078,18 @@ void TypeChecker2::visit(AstExprFunction* fn)
 
                 TypeId annotatedArgTy = lookupAnnotation(arg->annotation);
 
-                TypeId argTy = fn->argsDefaults.data[i] ? stripNil(builtinTypes, *module->internalTypes, inferredArgTy) : inferredArgTy;
-                testIsSubtype(argTy, annotatedArgTy, arg->location);
+                if (FFlag::LuauDefaultArguments)
+                {
+                    TypeId argTy = fn->argsDefaults.data[i] ? stripNil(builtinTypes, *module->internalTypes, inferredArgTy) : inferredArgTy;
+                    testIsSubtype(argTy, annotatedArgTy, arg->location);
 
-                if (AstExpr* defaultValue = fn->argsDefaults.data[i])
-                    testIsSubtype(lookupType(defaultValue), annotatedArgTy, defaultValue->location);
+                    if (AstExpr* defaultValue = fn->argsDefaults.data[i])
+                        testIsSubtype(lookupType(defaultValue), annotatedArgTy, defaultValue->location);
+                }
+                else
+                {
+                    testIsSubtype(inferredArgTy, annotatedArgTy, arg->location);
+                }
             }
 
             // Some Luau constructs can result in an argument type being
