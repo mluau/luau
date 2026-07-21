@@ -4251,8 +4251,8 @@ void TypeChecker::checkArgumentList(
             namePath = *path;
 
         auto [minParams, optMaxParams] = getParameterExtents(&state.log, paramPack);
-        state.reportError(TypeError
-            {
+        state.reportError(
+            TypeError{
                 location,
                 CountMismatch{
                     minParams, optMaxParams, std::distance(begin(argPack), end(argPack)), CountMismatch::Context::Arg, false, std::move(namePath)
@@ -4803,8 +4803,7 @@ std::unique_ptr<WithPredicate<TypePackId>> TypeChecker::checkCallOverload(
             overloadsThatDont.push_back(fn);
 
         errors.push_back(
-            OverloadErrorEntry
-            {
+            OverloadErrorEntry{
                 std::move(state.log),
                 std::move(state.errors),
                 args->head,

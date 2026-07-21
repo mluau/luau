@@ -1141,8 +1141,8 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
 
             TypeId instanceMetatable = arena->addType(TableType{instanceMetatableProps, std::nullopt, TypeLevel{}, scope.get(), TableState::Sealed});
 
-            TypeId classInstanceTy = arena->addType(ExternType
-                {
+            TypeId classInstanceTy = arena->addType(
+                ExternType{
                     declName, std::move(props), builtinTypes->objectType, instanceMetatable, Tags{}, nullptr, module->name, classDecl->location
                 }
             );

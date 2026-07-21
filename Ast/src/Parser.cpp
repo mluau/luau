@@ -1628,8 +1628,7 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
                 // Either both of these are present or neither are.
                 LUAU_ASSERT((bool)propType == (bool)typeColonLocation);
                 declarations.push_back(
-                    AstClassProperty
-                    {
+                    AstClassProperty{
                         *qualifierLocation,
                         propName->name,
                         propName->location,
@@ -1685,8 +1684,7 @@ LUAU_NOINLINE AstStat* Parser::parseClassStat(const Location& start, bool export
                 classMemberNamespace.insert(name.name);
 
                 declarations.push_back(
-                    AstClassMethod
-                    {
+                    AstClassMethod{
                         qualifierLocation,
                         matchFunction.location,
                         name.name,
@@ -1992,8 +1990,8 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
 
                     if (chars && !containsNull)
                     {
-                        props.push_back(AstDeclaredExternTypeProperty
-                            {
+                        props.push_back(
+                            AstDeclaredExternTypeProperty{
                                 AstName(chars->data), Location(nameBegin, nameEnd), type, false, Location(begin.location, lexer.previousLocation())
                             }
                         );

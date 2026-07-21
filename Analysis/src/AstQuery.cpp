@@ -12,7 +12,7 @@
 
 #include <algorithm>
 
-LUAU_FASTFLAGVARIABLE(LuauDefaultArguments)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 namespace Luau
 {
