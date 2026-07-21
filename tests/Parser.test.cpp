@@ -23,6 +23,7 @@ LUAU_FASTFLAG(LuauIntegerType2)
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
 LUAU_FASTFLAG(LuauAllowGlobalDeclarationToBeCalledClass)
 LUAU_FASTFLAG(LuauTrackPrefixLocal)
+LUAU_FASTFLAG(DebugLuauDefaultArguments)
 
 LUAU_FASTFLAG(LuauNoDuplicateBinaryPrefix)
 
@@ -2150,6 +2151,30 @@ TEST_CASE_FIXTURE(Fixture, "parse_declarations")
 
     matchParseError("declare function foo(x)", "All declaration parameters must be annotated");
     matchParseError("declare foo", "Expected ':' when parsing global variable declaration, got <eof>");
+}
+
+TEST_CASE_FIXTURE(Fixture, "default_arguments_are_gated")
+{
+    matchParseError("local function foo(x = 1) end", "Expected ')' (to close '(' at column 19), got '='");
+
+    ScopedFastFlag sff{FFlag::DebugLuauDefaultArguments, true};
+
+    parse("local function foo(x = 1) end");
+}
+
+TEST_CASE_FIXTURE(Fixture, "default_arguments_are_not_allowed_in_declarations")
+{
+    ScopedFastFlag sff{FFlag::DebugLuauDefaultArguments, true};
+
+    matchParseError("declare function foo(x: number = 1)", "Expected ')' (to close '(' at column 21), got '='");
+    matchParseError(
+        R"(
+            declare extern type Foo with
+                function bar(self, x: number = 1)
+            end
+        )",
+        "Expected ')' (to close '(' at line 3), got '='"
+    );
 }
 
 TEST_CASE_FIXTURE(Fixture, "parse_global_declaration_called_class")
@@ -5860,7 +5885,7 @@ export local answer = 42
         R"(
 export class Player
     public health: number
-    
+
     function setHealth(self, health: number)
         self.health = health
         return self

@@ -34,6 +34,7 @@ LUAU_FASTFLAGVARIABLE(LuauCstAttr)
 LUAU_FASTFLAGVARIABLE(LuauStoreConstKeywordBegin)
 LUAU_FASTFLAGVARIABLE(LuauNoDuplicateBinaryPrefix)
 LUAU_FASTFLAGVARIABLE(LuauTrackPrefixLocal)
+LUAU_FASTFLAGVARIABLE(DebugLuauDefaultArguments)
 
 // Clip with DebugLuauReportReturnTypeVariadicWithTypeSuffix
 bool luau_telemetry_parsed_return_type_variadic_with_type_suffix = false;
@@ -1781,7 +1782,7 @@ AstDeclaredExternTypeProperty Parser::parseDeclaredExternTypeMethod(const AstArr
     Location varargLocation;
     AstTypePack* varargAnnotation = nullptr;
     if (lexer.current().type != ')')
-        std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3 */ true, /* allowDefault= */ true);
+        std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3 */ true, /* allowDefault= */ false);
 
     expectMatchAndConsume(')', matchParen);
 
@@ -1852,7 +1853,7 @@ AstStat* Parser::parseDeclaration(const Location& start, const AstArray<AstAttr*
         AstTypePack* varargAnnotation = nullptr;
 
         if (lexer.current().type != ')')
-            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ true);
+            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ false);
 
         expectMatchAndConsume(')', matchParen);
 
@@ -2330,10 +2331,16 @@ std::pair<AstExprFunction*, AstLocal*> Parser::parseFunctionBody(
     {
         if (cstNode)
             std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(
-                args, /* allowDot3= */ true, /* allowDefault= */ true, &cstNode->argsCommaPositions, nullptr, &cstNode->varargAnnotationColonPosition
+                args,
+                /* allowDot3= */ true,
+                /* allowDefault= */ FFlag::DebugLuauDefaultArguments,
+                &cstNode->argsCommaPositions,
+                nullptr,
+                &cstNode->varargAnnotationColonPosition
             );
         else
-            std::tie(vararg, varargLocation, varargAnnotation) = parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ true);
+            std::tie(vararg, varargLocation, varargAnnotation) =
+                parseBindingList(args, /* allowDot3= */ true, /* allowDefault= */ FFlag::DebugLuauDefaultArguments);
     }
 
     std::optional<Location> argLocation;

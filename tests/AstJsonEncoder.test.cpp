@@ -13,12 +13,14 @@ using namespace Luau;
 
 
 LUAU_FASTFLAG(LuauDisallowExternClassInTypeDefinitions)
+LUAU_FASTFLAG(DebugLuauDefaultArguments)
 
 struct JsonEncoderFixture
 {
     Allocator allocator;
     AstNameTable names{allocator};
     ScopedFastFlag sff{FFlag::LuauDisallowExternClassInTypeDefinitions, true};
+    ScopedFastFlag sffDefaultArguments{FFlag::DebugLuauDefaultArguments, true};
 
     ParseResult parse(std::string_view src)
     {
@@ -109,7 +111,8 @@ TEST_CASE("encode_AstStatBlock")
 
     CHECK(
         toJson(&block) ==
-        (R"({"type":"AstStatBlock","location":"0,0 - 0,0","hasEnd":true,"body":[{"type":"AstStatLocal","location":"0,0 - 0,0","vars":[{"luauType":null,"name":"a_local","isConst":false,"type":"AstLocal","location":"0,0 - 0,0"}],"values":[]}]})")
+        (R"({"type":"AstStatBlock","location":"0,0 - 0,0","hasEnd":true,"body":[{"type":"AstStatLocal","location":"0,0 - 0,0","vars":[{"luauType":null,"name":"a_local","isConst":false,"type":"AstLocal","location":"0,0 - 0,0"}],"values":[]}]})"
+        )
     );
 }
 
@@ -128,7 +131,8 @@ TEST_CASE_FIXTURE(JsonEncoderFixture, "encode_tables")
 
     CHECK(
         json ==
-        (R"({"type":"AstStatBlock","location":"0,0 - 6,4","hasEnd":true,"body":[{"type":"AstStatLocal","location":"1,8 - 5,9","vars":[{"luauType":{"type":"AstTypeTable","location":"1,17 - 3,9","props":[{"name":"foo","type":"AstTableProp","location":"2,12 - 2,15","propType":{"type":"AstTypeReference","location":"2,17 - 2,23","name":"number","nameLocation":"2,17 - 2,23","parameters":[]}}],"indexer":null},"name":"x","isConst":false,"type":"AstLocal","location":"1,14 - 1,15"}],"values":[{"type":"AstExprTable","location":"3,12 - 5,9","items":[{"type":"AstExprTableItem","kind":"record","key":{"type":"AstExprConstantString","location":"4,12 - 4,15","value":"foo"},"value":{"type":"AstExprConstantNumber","location":"4,18 - 4,21","value":123}}]}]}]})")
+        (R"({"type":"AstStatBlock","location":"0,0 - 6,4","hasEnd":true,"body":[{"type":"AstStatLocal","location":"1,8 - 5,9","vars":[{"luauType":{"type":"AstTypeTable","location":"1,17 - 3,9","props":[{"name":"foo","type":"AstTableProp","location":"2,12 - 2,15","propType":{"type":"AstTypeReference","location":"2,17 - 2,23","name":"number","nameLocation":"2,17 - 2,23","parameters":[]}}],"indexer":null},"name":"x","isConst":false,"type":"AstLocal","location":"1,14 - 1,15"}],"values":[{"type":"AstExprTable","location":"3,12 - 5,9","items":[{"type":"AstExprTableItem","kind":"record","key":{"type":"AstExprConstantString","location":"4,12 - 4,15","value":"foo"},"value":{"type":"AstExprConstantNumber","location":"4,18 - 4,21","value":123}}]}]}]})"
+        )
     );
 }
 

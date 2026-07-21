@@ -13,6 +13,7 @@ LUAU_FASTFLAG(DebugLuauNoInline)
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
 LUAU_FASTFLAG(LuauTableEntriesDontNeedToMatchIndent)
 LUAU_FASTFLAG(LuauCstAttr)
+LUAU_FASTFLAG(DebugLuauDefaultArguments)
 
 using namespace Luau;
 
@@ -902,6 +903,8 @@ TEST_CASE("roundtrip_generic_types")
 
 TEST_CASE("roundtrip_function_arg_defaults")
 {
+    ScopedFastFlag sff{FFlag::DebugLuauDefaultArguments, true};
+
     const std::string code = R"(
         local function foo(a:string=1)
         end

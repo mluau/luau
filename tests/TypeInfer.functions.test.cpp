@@ -25,6 +25,7 @@ LUAU_FASTFLAG(LuauBidirectionalInferenceVariadics)
 LUAU_FASTFLAG(LuauBidirectionalInferenceBetterLambdaHandling)
 LUAU_FASTFLAG(LuauHigherOrderGenericInference)
 LUAU_FASTFLAG(LuauCollapseDirectBoundCycles)
+LUAU_FASTFLAG(DebugLuauDefaultArguments)
 
 TEST_SUITE_BEGIN("TypeInferFunctions");
 
@@ -4371,7 +4372,10 @@ TEST_CASE_FIXTURE(BuiltinsFixture, "pass_generic_function_to_pcall")
 
 TEST_CASE_FIXTURE(Fixture, "default_argument_infers_parameter_type")
 {
-    ScopedFastFlag sff{FFlag::DebugLuauForceOldSolver, false};
+    ScopedFastFlag sffs[] = {
+        {FFlag::DebugLuauForceOldSolver, false},
+        {FFlag::DebugLuauDefaultArguments, true},
+    };
 
     CheckResult result = check(R"(
         local function foo(bar = 1)
@@ -4385,7 +4389,10 @@ TEST_CASE_FIXTURE(Fixture, "default_argument_infers_parameter_type")
 
 TEST_CASE_FIXTURE(Fixture, "default_argument_is_checked_against_parameter_annotation")
 {
-    ScopedFastFlag sff{FFlag::DebugLuauForceOldSolver, false};
+    ScopedFastFlag sffs[] = {
+        {FFlag::DebugLuauForceOldSolver, false},
+        {FFlag::DebugLuauDefaultArguments, true},
+    };
 
     CheckResult result = check(R"(
         local function foo(bar: string = 1)
