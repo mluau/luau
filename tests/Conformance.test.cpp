@@ -71,6 +71,7 @@ LUAU_FASTFLAG(LuauUdataMetatablePinned)
 LUAU_DYNAMIC_FASTFLAG(LuauGcTableStepFix)
 LUAU_FASTFLAG(LuauCodegenFixTwoResA64Builtin)
 LUAU_FASTFLAG(LuauMathRoundNegZero)
+LUAU_FASTFLAG(LuauDefaultArguments)
 
 #ifndef LUAU_CONFORMANCE_SOURCE_DIR
 // Walks up from the current directory looking for the Client folder,
@@ -4762,7 +4763,9 @@ TEST_CASE("CodegenRandomizeFunctionalCorrectness")
 
 TEST_CASE("DefaultArguments")
 {
-    runConformance("defaultarg.lua");
+    ScopedFastFlag sff{FFlag::LuauDefaultArguments, true};
+
+    runConformance("defaultarg.luau");
 }
 
 TEST_SUITE_END();
