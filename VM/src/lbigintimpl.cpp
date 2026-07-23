@@ -9,14 +9,76 @@
 #include <stdio.h>
 #include <string.h>
 
+static uint64_t get_bottom_64(BigInt b) {
+    if (!b.heap) return (uint64_t)b.smi;
+    uint64_t val = 0;
+    if (b.heap->size > 0) val |= b.heap->digits[0];
+    if (b.heap->size > 1) val |= ((uint64_t)b.heap->digits[1] << 32);
+    if (b.heap->isNegative) val = ~val + 1;
+    return val;
+}
+#define DO_TYPED_MATH(TYPE, UTYPE, OP) { res = (int64_t)(TYPE)((UTYPE)va OP (UTYPE)vb); }
+#define DO_TYPED_UMATH(UTYPE, OP) { res = (uint64_t)(UTYPE)((UTYPE)va OP (UTYPE)vb); }
 
-BigInt luaZ_newbigint(int64_t v)
+#define HANDLE_TYPED_MATH(L, a, b, OP) \
+    if (a.mode != BigIntMode_Dynamic || b.mode != BigIntMode_Dynamic) { \
+        if (a.mode != b.mode) { \
+            luaG_runerror(L, "attempt to perform arithmetic on mixed typed bigints"); \
+        } \
+        BigIntMode mode = a.mode; \
+        uint64_t va = get_bottom_64(a); \
+        uint64_t vb = get_bottom_64(b); \
+        uint64_t res = 0; \
+        switch (mode) { \
+            case BigIntMode_I8: DO_TYPED_MATH(int8_t, uint8_t, OP); break; \
+            case BigIntMode_U8: DO_TYPED_UMATH(uint8_t, OP); break; \
+            case BigIntMode_I16: DO_TYPED_MATH(int16_t, uint16_t, OP); break; \
+            case BigIntMode_U16: DO_TYPED_UMATH(uint16_t, OP); break; \
+            case BigIntMode_I32: DO_TYPED_MATH(int32_t, uint32_t, OP); break; \
+            case BigIntMode_U32: DO_TYPED_UMATH(uint32_t, OP); break; \
+            case BigIntMode_I64: DO_TYPED_MATH(int64_t, uint64_t, OP); break; \
+            case BigIntMode_U64: DO_TYPED_UMATH(uint64_t, OP); break; \
+            default: break; \
+        } \
+        return luaZ_newbigint((int64_t)res, mode); \
+    }
+
+#define DO_TYPED_DIV(TYPE, UTYPE, OP) { UTYPE ta = (UTYPE)va, tb = (UTYPE)vb; if (tb == (UTYPE)-1 && ta == (UTYPE)((TYPE)1 << (sizeof(TYPE)*8-1))) { res = (int64_t)(TYPE)ta; } else { res = (int64_t)(TYPE)((TYPE)ta OP (TYPE)tb); } }
+#define DO_TYPED_UDIV(UTYPE, OP) { res = (uint64_t)(UTYPE)((UTYPE)va OP (UTYPE)vb); }
+
+#define HANDLE_TYPED_DIV(L, a, b, OP, is_mod) \
+    if (a.mode != BigIntMode_Dynamic || b.mode != BigIntMode_Dynamic) { \
+        if (a.mode != b.mode) { \
+            luaG_runerror(L, "attempt to perform arithmetic on mixed typed bigints"); \
+        } \
+        BigIntMode mode = a.mode; \
+        uint64_t va = get_bottom_64(a); \
+        uint64_t vb = get_bottom_64(b); \
+        if (vb == 0) luaG_runerror(L, is_mod ? "attempt to perform modulo by zero" : "attempt to divide by zero"); \
+        uint64_t res = 0; \
+        switch (mode) { \
+            case BigIntMode_I8: DO_TYPED_DIV(int8_t, uint8_t, OP); break; \
+            case BigIntMode_U8: DO_TYPED_UDIV(uint8_t, OP); break; \
+            case BigIntMode_I16: DO_TYPED_DIV(int16_t, uint16_t, OP); break; \
+            case BigIntMode_U16: DO_TYPED_UDIV(uint16_t, OP); break; \
+            case BigIntMode_I32: DO_TYPED_DIV(int32_t, uint32_t, OP); break; \
+            case BigIntMode_U32: DO_TYPED_UDIV(uint32_t, OP); break; \
+            case BigIntMode_I64: DO_TYPED_DIV(int64_t, uint64_t, OP); break; \
+            case BigIntMode_U64: DO_TYPED_UDIV(uint64_t, OP); break; \
+            default: break; \
+        } \
+        return luaZ_newbigint((int64_t)res, mode); \
+    }
+
+BigInt luaZ_newbigint(int64_t v, BigIntMode mode)
 {
     BigInt b;
     b.smi = v;
     b.heap = nullptr;
+    b.mode = mode;
     return b;
 }
+
 
 static HeapBigInt* lua_newheapbigint(lua_State* L, uint32_t capacity)
 {
@@ -120,9 +182,15 @@ static BigInt pack_bigint(lua_State* L, HeapBigInt* h) {
             return luaZ_newbigint(val == (uint64_t)INT64_MAX + 1 ? INT64_MIN : -(int64_t)val);
         }
     }
+    return luaZ_bigint_from_heap(h);
+}
+
+BigInt luaZ_bigint_from_heap(HeapBigInt* h)
+{
     BigInt b;
     b.smi = 0;
     b.heap = h;
+    b.mode = BigIntMode_Dynamic;
     return b;
 }
 
@@ -236,6 +304,7 @@ static void div_mod_abs(lua_State* L, const BigIntView& n, const BigIntView& d, 
 
 BigInt luaZ_bigint_add(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_MATH(L, a, b, +)
     if (!a.heap && !b.heap) {
         int64_t sum;
         if (!__builtin_add_overflow(a.smi, b.smi, &sum))
@@ -266,6 +335,7 @@ BigInt luaZ_bigint_add(lua_State* L, BigInt a, BigInt b)
 
 BigInt luaZ_bigint_sub(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_MATH(L, a, b, -)
     if (!a.heap && !b.heap) {
         int64_t diff;
         if (!__builtin_sub_overflow(a.smi, b.smi, &diff))
@@ -296,6 +366,7 @@ BigInt luaZ_bigint_sub(lua_State* L, BigInt a, BigInt b)
 
 BigInt luaZ_bigint_mul(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_MATH(L, a, b, *)
     if (!a.heap && !b.heap) {
         int64_t prod;
         if (!__builtin_mul_overflow(a.smi, b.smi, &prod))
@@ -317,6 +388,7 @@ BigInt luaZ_bigint_mul(lua_State* L, BigInt a, BigInt b)
 
 BigInt luaZ_bigint_div(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_DIV(L, a, b, /, false)
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
             // Check for INT64_MIN / -1
@@ -346,6 +418,7 @@ BigInt luaZ_bigint_div(lua_State* L, BigInt a, BigInt b)
 
 BigInt luaZ_bigint_mod(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_DIV(L, a, b, %, true)
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
             if (a.smi == INT64_MIN && b.smi == -1) {
@@ -386,6 +459,7 @@ BigInt luaZ_bigint_mod(lua_State* L, BigInt a, BigInt b)
 
 BigInt luaZ_bigint_rem(lua_State* L, BigInt a, BigInt b)
 {
+    HANDLE_TYPED_DIV(L, a, b, %, true)
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
             if (a.smi == INT64_MIN && b.smi == -1) {
@@ -476,7 +550,11 @@ void lua_pushbigint_string(lua_State* L, BigInt b)
     if (!b.heap)
     {
         char buf[64];
-        snprintf(buf, 64, "%lld", (long long)b.smi);
+        if (b.mode == BigIntMode_U8 || b.mode == BigIntMode_U16 || b.mode == BigIntMode_U32 || b.mode == BigIntMode_U64) {
+            snprintf(buf, 64, "%llu", (unsigned long long)b.smi);
+        } else {
+            snprintf(buf, 64, "%lld", (long long)b.smi);
+        }
         lua_pushstring(L, buf);
         return;
     }

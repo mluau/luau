@@ -114,6 +114,7 @@ typedef struct lua_TValue
         TValue* i_o = (obj); \
         i_o->value.l = (x); \
         i_o->tt = LUA_TBIGINT; \
+        i_o->extra[0] = 0; \
     }
 
 #if LUA_VECTOR_SIZE == 4
@@ -328,13 +329,26 @@ typedef struct HeapBigInt
     uint32_t* digits;
 } HeapBigInt;
 
+enum BigIntMode : uint8_t {
+    BigIntMode_Dynamic = 0,
+    BigIntMode_I8,
+    BigIntMode_U8,
+    BigIntMode_I16,
+    BigIntMode_U16,
+    BigIntMode_I32,
+    BigIntMode_U32,
+    BigIntMode_I64,
+    BigIntMode_U64
+};
+
 typedef struct BigInt
 {
     int64_t smi;
     HeapBigInt* heap;
+    BigIntMode mode;
 } BigInt;
 
-BigInt luaZ_newbigint(int64_t v);
+BigInt luaZ_newbigint(int64_t v, BigIntMode mode = BigIntMode_Dynamic);
 BigInt luaZ_bigint_from_heap(HeapBigInt* h);
 bool luaZ_bigint_eq(BigInt a, BigInt b);
 uint32_t luaZ_bigint_hash(BigInt b);
@@ -356,11 +370,13 @@ inline BigInt bigintvalue(const TValue* o) {
         BigInt b;
         b.smi = o->value.l;
         b.heap = nullptr;
+        b.mode = (BigIntMode)o->extra[0];
         return b;
     } else {
         BigInt b;
         b.smi = 0;
         b.heap = (HeapBigInt*)o->value.gc;
+        b.mode = (BigIntMode)o->extra[0];
         return b;
     }
 }
@@ -369,9 +385,11 @@ inline void setbigintvalue(TValue* obj, BigInt b) {
     if (b.heap) {
         obj->value.gc = (GCObject*)b.heap;
         obj->tt = LUA_THEAPBIGINT;
+        obj->extra[0] = b.mode;
     } else {
         obj->value.l = b.smi;
         obj->tt = LUA_TBIGINT;
+        obj->extra[0] = b.mode;
     }
 }
 
@@ -549,11 +567,13 @@ inline BigInt bigintvalue(const TKey* o) {
         BigInt b;
         b.smi = o->value.l;
         b.heap = nullptr;
+        b.mode = (BigIntMode)o->extra[0];
         return b;
     } else {
         BigInt b;
         b.smi = 0;
         b.heap = (HeapBigInt*)o->value.gc;
+        b.mode = (BigIntMode)o->extra[0];
         return b;
     }
 }
