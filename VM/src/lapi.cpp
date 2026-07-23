@@ -500,7 +500,7 @@ BigInt lua_tobigint(lua_State* L, int idx)
     if (ttisbigint(o)) {
         return bigintvalue(o);
     }
-    return lua_newbigint(0);
+    return luaZ_newbigint(0);
 }
 
 void lua_pushbigint_string(lua_State* L, int idx)

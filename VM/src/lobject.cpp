@@ -46,7 +46,7 @@ int luaO_rawequalObj(const TValue* t1, const TValue* t2)
             return luai_numeq(nvalue(t1), nvalue(t2));
         case LUA_TBIGINT:
         case LUA_THEAPBIGINT:
-            return lua_bigint_eq(bigintvalue(t1), bigintvalue(t2));
+            return luaZ_bigint_eq(bigintvalue(t1), bigintvalue(t2));
         case LUA_TVECTOR:
             return luai_veceq(vvalue(t1), vvalue(t2));
         case LUA_TBOOLEAN:
@@ -72,7 +72,7 @@ int luaO_rawequalKey(const TKey* t1, const TValue* t2)
             return luai_numeq(nvalue(t1), nvalue(t2));
         case LUA_TBIGINT:
         case LUA_THEAPBIGINT:
-            return lua_bigint_eq(bigintvalue(t1), bigintvalue(t2));
+            return luaZ_bigint_eq(bigintvalue(t1), bigintvalue(t2));
         case LUA_TVECTOR:
             return luai_veceq(vvalue(t1), vvalue(t2));
         case LUA_TBOOLEAN:

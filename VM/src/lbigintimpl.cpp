@@ -10,7 +10,7 @@
 #include <string.h>
 
 
-BigInt lua_newbigint(int64_t v)
+BigInt luaZ_newbigint(int64_t v)
 {
     BigInt b;
     b.smi = v;
@@ -61,7 +61,7 @@ static BigIntView get_view(const BigInt& b, uint32_t temp[2]) {
     }
 }
 
-bool lua_bigint_eq(BigInt a, BigInt b)
+bool luaZ_bigint_eq(BigInt a, BigInt b)
 {
     uint32_t ta[2], tb[2];
     BigIntView va = get_view(a, ta);
@@ -73,7 +73,7 @@ bool lua_bigint_eq(BigInt a, BigInt b)
     return memcmp(va.digits, vb.digits, va.size * sizeof(uint32_t)) == 0;
 }
 
-uint32_t lua_bigint_hash(BigInt b)
+uint32_t luaZ_bigint_hash(BigInt b)
 {
     uint32_t t[2];
     BigIntView v = get_view(b, t);
@@ -107,7 +107,7 @@ static void normalize(HeapBigInt* h) {
 static BigInt pack_bigint(lua_State* L, HeapBigInt* h) {
     normalize(h);
     if (h->size == 0) {
-        return lua_newbigint(0);
+        return luaZ_newbigint(0);
     }
     if (h->size <= 2) {
         uint64_t val = h->digits[0];
@@ -115,9 +115,9 @@ static BigInt pack_bigint(lua_State* L, HeapBigInt* h) {
             val |= ((uint64_t)h->digits[1] << 32);
         }
         if (!h->isNegative && val <= (uint64_t)INT64_MAX) {
-            return lua_newbigint((int64_t)val);
+            return luaZ_newbigint((int64_t)val);
         } else if (h->isNegative && val <= (uint64_t)INT64_MAX + 1) {
-            return lua_newbigint(val == (uint64_t)INT64_MAX + 1 ? INT64_MIN : -(int64_t)val);
+            return luaZ_newbigint(val == (uint64_t)INT64_MAX + 1 ? INT64_MIN : -(int64_t)val);
         }
     }
     BigInt b;
@@ -234,12 +234,12 @@ static void div_mod_abs(lua_State* L, const BigIntView& n, const BigIntView& d, 
     }
 }
 
-BigInt lua_bigint_add(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_add(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         int64_t sum;
         if (!__builtin_add_overflow(a.smi, b.smi, &sum))
-            return lua_newbigint(sum);
+            return luaZ_newbigint(sum);
     }
     
     uint32_t ta[2], tb[2];
@@ -264,12 +264,12 @@ BigInt lua_bigint_add(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, res);
 }
 
-BigInt lua_bigint_sub(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_sub(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         int64_t diff;
         if (!__builtin_sub_overflow(a.smi, b.smi, &diff))
-            return lua_newbigint(diff);
+            return luaZ_newbigint(diff);
     }
     
     uint32_t ta[2], tb[2];
@@ -294,12 +294,12 @@ BigInt lua_bigint_sub(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, res);
 }
 
-BigInt lua_bigint_mul(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_mul(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         int64_t prod;
         if (!__builtin_mul_overflow(a.smi, b.smi, &prod))
-            return lua_newbigint(prod);
+            return luaZ_newbigint(prod);
     }
     
     uint32_t ta[2], tb[2];
@@ -315,7 +315,7 @@ BigInt lua_bigint_mul(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, res);
 }
 
-BigInt lua_bigint_div(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_div(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
@@ -323,7 +323,7 @@ BigInt lua_bigint_div(lua_State* L, BigInt a, BigInt b)
             if (a.smi == INT64_MIN && b.smi == -1) {
                 // Will overflow int64, fallback to heap
             } else {
-                return lua_newbigint(a.smi / b.smi);
+                return luaZ_newbigint(a.smi / b.smi);
             }
         } else {
             luaG_runerror(L, "attempt to divide by zero");
@@ -344,18 +344,18 @@ BigInt lua_bigint_div(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, q);
 }
 
-BigInt lua_bigint_mod(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_mod(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
             if (a.smi == INT64_MIN && b.smi == -1) {
-                return lua_newbigint(0);
+                return luaZ_newbigint(0);
             }
             int64_t r = a.smi % b.smi;
             if (r != 0 && (a.smi ^ b.smi) < 0) {
                 r += b.smi;
             }
-            return lua_newbigint(r);
+            return luaZ_newbigint(r);
         } else {
             luaG_runerror(L, "attempt to perform 'n%%0'");
         }
@@ -384,14 +384,14 @@ BigInt lua_bigint_mod(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, r);
 }
 
-BigInt lua_bigint_rem(lua_State* L, BigInt a, BigInt b)
+BigInt luaZ_bigint_rem(lua_State* L, BigInt a, BigInt b)
 {
     if (!a.heap && !b.heap) {
         if (b.smi != 0) {
             if (a.smi == INT64_MIN && b.smi == -1) {
-                return lua_newbigint(0);
+                return luaZ_newbigint(0);
             }
-            return lua_newbigint(a.smi % b.smi);
+            return luaZ_newbigint(a.smi % b.smi);
         } else {
             luaG_runerror(L, "attempt to perform 'n%%0'");
         }
@@ -410,7 +410,7 @@ BigInt lua_bigint_rem(lua_State* L, BigInt a, BigInt b)
     return pack_bigint(L, r);
 }
 
-BigInt lua_bigint_neg(lua_State* L, BigInt a)
+BigInt luaZ_bigint_neg(lua_State* L, BigInt a)
 {
     if (!a.heap) {
         if (a.smi == INT64_MIN) {
@@ -423,7 +423,7 @@ BigInt lua_bigint_neg(lua_State* L, BigInt a)
             res->digits[2] = 0x80000000;
             return pack_bigint(L, res);
         }
-        return lua_newbigint(-a.smi);
+        return luaZ_newbigint(-a.smi);
     }
     
     HeapBigInt* res = lua_newheapbigint(L, a.heap->size);
@@ -435,9 +435,9 @@ BigInt lua_bigint_neg(lua_State* L, BigInt a)
     return pack_bigint(L, res);
 }
 
-BigInt lua_bigint_fromstring(lua_State* L, const char* str)
+BigInt luaZ_bigint_fromstring(lua_State* L, const char* str)
 {
-    BigInt res = lua_newbigint(0);
+    BigInt res = luaZ_newbigint(0);
     bool isNegative = false;
     if (*str == '-')
     {
@@ -453,9 +453,9 @@ BigInt lua_bigint_fromstring(lua_State* L, const char* str)
     {
         if (*str >= '0' && *str <= '9')
         {
-            BigInt ten = lua_newbigint(10);
-            BigInt digit = lua_newbigint(*str - '0');
-            res = lua_bigint_add(L, lua_bigint_mul(L, res, ten), digit);
+            BigInt ten = luaZ_newbigint(10);
+            BigInt digit = luaZ_newbigint(*str - '0');
+            res = luaZ_bigint_add(L, luaZ_bigint_mul(L, res, ten), digit);
         }
         else
         {
@@ -466,7 +466,7 @@ BigInt lua_bigint_fromstring(lua_State* L, const char* str)
 
     if (isNegative)
     {
-        res = lua_bigint_neg(L, res);
+        res = luaZ_bigint_neg(L, res);
     }
     return res;
 }
@@ -484,13 +484,13 @@ void lua_pushbigint_string(lua_State* L, BigInt b)
     char buf[400];
     int pos = 0;
     
-    BigInt ten = lua_newbigint(10);
+    BigInt ten = luaZ_newbigint(10);
     BigInt current = b;
     bool isNegative = current.heap->isNegative;
     
     BigInt absCurrent;
     if (isNegative) {
-        absCurrent = lua_bigint_neg(L, current);
+        absCurrent = luaZ_bigint_neg(L, current);
     } else {
         absCurrent = current;
     }
@@ -505,8 +505,8 @@ void lua_pushbigint_string(lua_State* L, BigInt b)
         }
         if (isZero) break;
         
-        BigInt rem = lua_bigint_rem(L, absCurrent, ten);
-        BigInt div = lua_bigint_div(L, absCurrent, ten);
+        BigInt rem = luaZ_bigint_rem(L, absCurrent, ten);
+        BigInt div = luaZ_bigint_div(L, absCurrent, ten);
         
         buf[pos++] = '0' + (char)(rem.heap ? 0 : rem.smi);
         absCurrent = div;

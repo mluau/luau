@@ -9,26 +9,26 @@ TEST_SUITE_BEGIN("BigIntTests");
 TEST_CASE("BigInt_SMI_Arithmetic") {
     lua_State* L = luaL_newstate();
     
-    BigInt a = lua_newbigint(5);
-    BigInt b = lua_newbigint(10);
+    BigInt a = luaZ_newbigint(5);
+    BigInt b = luaZ_newbigint(10);
     
-    BigInt sum = lua_bigint_add(L, a, b);
+    BigInt sum = luaZ_bigint_add(L, a, b);
     CHECK(sum.heap == nullptr);
     CHECK(sum.smi == 15);
     
-    BigInt diff = lua_bigint_sub(L, a, b);
+    BigInt diff = luaZ_bigint_sub(L, a, b);
     CHECK(diff.heap == nullptr);
     CHECK(diff.smi == -5);
     
-    BigInt prod = lua_bigint_mul(L, a, b);
+    BigInt prod = luaZ_bigint_mul(L, a, b);
     CHECK(prod.heap == nullptr);
     CHECK(prod.smi == 50);
     
-    BigInt div = lua_bigint_div(L, b, a);
+    BigInt div = luaZ_bigint_div(L, b, a);
     CHECK(div.heap == nullptr);
     CHECK(div.smi == 2);
     
-    BigInt mod = lua_bigint_mod(L, lua_newbigint(11), lua_newbigint(4));
+    BigInt mod = luaZ_bigint_mod(L, luaZ_newbigint(11), luaZ_newbigint(4));
     CHECK(mod.heap == nullptr);
     CHECK(mod.smi == 3);
     
@@ -40,11 +40,11 @@ TEST_CASE("BigInt_Heap_Multiplication_And_Addition") {
     
     // 2^60
     int64_t large_val = 1LL << 60;
-    BigInt a = lua_newbigint(large_val);
+    BigInt a = luaZ_newbigint(large_val);
     
     // (2^60) * (2^60) = 2^120
     // This will definitely overflow int64_t and fallback to HeapBigInt
-    BigInt prod = lua_bigint_mul(L, a, a);
+    BigInt prod = luaZ_bigint_mul(L, a, a);
     
     REQUIRE(prod.heap != nullptr);
     CHECK(prod.heap->isNegative == false);
@@ -61,7 +61,7 @@ TEST_CASE("BigInt_Heap_Multiplication_And_Addition") {
     
     // Now test addition on heap bigints
     // (2^120) + (2^120) = 2^121
-    BigInt sum = lua_bigint_add(L, prod, prod);
+    BigInt sum = luaZ_bigint_add(L, prod, prod);
     REQUIRE(sum.heap != nullptr);
     REQUIRE(sum.heap->size == 4);
     CHECK(sum.heap->digits[0] == 0);
@@ -71,14 +71,14 @@ TEST_CASE("BigInt_Heap_Multiplication_And_Addition") {
     
     // Test subtraction
     // (2^121) - (2^120) = 2^120
-    BigInt diff = lua_bigint_sub(L, sum, prod);
+    BigInt diff = luaZ_bigint_sub(L, sum, prod);
     REQUIRE(diff.heap != nullptr);
     REQUIRE(diff.heap->size == 4);
     CHECK(diff.heap->digits[3] == (1U << 24));
     
     // Subtraction that yields negative
     // (2^120) - (2^121) = -2^120
-    BigInt neg_diff = lua_bigint_sub(L, prod, sum);
+    BigInt neg_diff = luaZ_bigint_sub(L, prod, sum);
     REQUIRE(neg_diff.heap != nullptr);
     CHECK(neg_diff.heap->isNegative == true);
     REQUIRE(neg_diff.heap->size == 4);
@@ -91,17 +91,17 @@ TEST_CASE("BigInt_Heap_Division_And_Modulo") {
     lua_State* L = luaL_newstate();
     
     int64_t large_val = 1LL << 60;
-    BigInt a = lua_newbigint(large_val);
-    BigInt num = lua_bigint_mul(L, a, a); // 2^120
+    BigInt a = luaZ_newbigint(large_val);
+    BigInt num = luaZ_bigint_mul(L, a, a); // 2^120
     
-    BigInt div = lua_newbigint(3);
+    BigInt div = luaZ_newbigint(3);
     
     // 2^120 / 3
-    BigInt q = lua_bigint_div(L, num, div);
+    BigInt q = luaZ_bigint_div(L, num, div);
     REQUIRE(q.heap != nullptr);
     CHECK(q.heap->isNegative == false);
     
-    BigInt rem = lua_bigint_rem(L, num, div);
+    BigInt rem = luaZ_bigint_rem(L, num, div);
     
     // 2^120 mod 3
     // 2 = -1 mod 3 -> 2^120 = (-1)^120 mod 3 = 1 mod 3

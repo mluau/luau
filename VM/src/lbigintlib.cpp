@@ -7,7 +7,7 @@ static int bigint_fromstring(lua_State* L)
 {
     size_t len;
     const char* str = luaL_checklstring(L, 1, &len);
-    BigInt b = lua_bigint_fromstring(L, str);
+    BigInt b = luaZ_bigint_fromstring(L, str);
     setbigintvalue(L->top, b);
     L->top++;
     return 1;

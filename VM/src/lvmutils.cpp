@@ -347,7 +347,7 @@ int luaV_equalval(lua_State* L, const TValue* t1, const TValue* t2)
         return luai_numeq(nvalue(t1), nvalue(t2));
     case LUA_TBIGINT:
     case LUA_THEAPBIGINT:
-        return lua_bigint_eq(bigintvalue(t1), bigintvalue(t2));
+        return luaZ_bigint_eq(bigintvalue(t1), bigintvalue(t2));
     case LUA_TVECTOR:
         return luai_veceq(vvalue(t1), vvalue(t2));
     case LUA_TBOOLEAN:
@@ -563,13 +563,13 @@ void luaV_doarithimpl(lua_State* L, StkId ra, const TValue* rb, const TValue* rc
         BigInt res;
         switch (op)
         {
-        case TM_ADD: res = lua_bigint_add(L, bb, bc); break;
-        case TM_SUB: res = lua_bigint_sub(L, bb, bc); break;
-        case TM_MUL: res = lua_bigint_mul(L, bb, bc); break;
-        case TM_DIV: res = lua_bigint_div(L, bb, bc); break;
-        case TM_IDIV: res = lua_bigint_div(L, bb, bc); break; // BigInt div is already floor div
-        case TM_MOD: res = lua_bigint_mod(L, bb, bc); break;
-        case TM_UNM: res = lua_bigint_neg(L, bb); break;
+        case TM_ADD: res = luaZ_bigint_add(L, bb, bc); break;
+        case TM_SUB: res = luaZ_bigint_sub(L, bb, bc); break;
+        case TM_MUL: res = luaZ_bigint_mul(L, bb, bc); break;
+        case TM_DIV: res = luaZ_bigint_div(L, bb, bc); break;
+        case TM_IDIV: res = luaZ_bigint_div(L, bb, bc); break; // BigInt div is already floor div
+        case TM_MOD: res = luaZ_bigint_mod(L, bb, bc); break;
+        case TM_UNM: res = luaZ_bigint_neg(L, bb); break;
         default:
             luaG_runerror(L, "attempt to perform arithmetic on bigints");
             return;

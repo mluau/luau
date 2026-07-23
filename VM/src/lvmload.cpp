@@ -626,7 +626,7 @@ static int loadsafe(
 
                 TString* str = strings.data[sid - 1];
 
-                BigInt parsed = lua_bigint_fromstring(L, getstr(str));
+                BigInt parsed = luaZ_bigint_fromstring(L, getstr(str));
                 setbigintvalue(&p->k[j], parsed);
                 break;
             }

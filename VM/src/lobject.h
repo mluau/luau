@@ -334,19 +334,19 @@ typedef struct BigInt
     HeapBigInt* heap;
 } BigInt;
 
-BigInt lua_newbigint(int64_t v);
-BigInt lua_bigint_from_heap(HeapBigInt* h);
-bool lua_bigint_eq(BigInt a, BigInt b);
-uint32_t lua_bigint_hash(BigInt b);
+BigInt luaZ_newbigint(int64_t v);
+BigInt luaZ_bigint_from_heap(HeapBigInt* h);
+bool luaZ_bigint_eq(BigInt a, BigInt b);
+uint32_t luaZ_bigint_hash(BigInt b);
 
-BigInt lua_bigint_add(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_sub(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_mul(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_div(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_mod(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_rem(lua_State* L, BigInt a, BigInt b);
-BigInt lua_bigint_neg(lua_State* L, BigInt a);
-BigInt lua_bigint_fromstring(lua_State* L, const char* str);
+BigInt luaZ_bigint_add(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_sub(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_mul(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_div(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_mod(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_rem(lua_State* L, BigInt a, BigInt b);
+BigInt luaZ_bigint_neg(lua_State* L, BigInt a);
+BigInt luaZ_bigint_fromstring(lua_State* L, const char* str);
 void lua_pushbigint_string(lua_State* L, BigInt b);
 
 void lua_freebigint(lua_State* L, HeapBigInt* h, struct lua_Page* page);

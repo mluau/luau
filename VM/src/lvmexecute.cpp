@@ -1773,7 +1773,7 @@ reentry:
                 {
                     BigInt bb = bigintvalue(rb);
                     BigInt bc = bigintvalue(rc);
-                    BigInt res = lua_bigint_add(L, bb, bc);
+                    BigInt res = luaZ_bigint_add(L, bb, bc);
                     setbigintvalue(ra, res);
                     VM_NEXT();
                 }
@@ -1827,7 +1827,7 @@ reentry:
                 {
                     BigInt bb = bigintvalue(rb);
                     BigInt bc = bigintvalue(rc);
-                    BigInt res = lua_bigint_sub(L, bb, bc);
+                    BigInt res = luaZ_bigint_sub(L, bb, bc);
                     setbigintvalue(ra, res);
                     VM_NEXT();
                 }
@@ -1881,7 +1881,7 @@ reentry:
                 {
                     BigInt bb = bigintvalue(rb);
                     BigInt bc = bigintvalue(rc);
-                    BigInt res = lua_bigint_mul(L, bb, bc);
+                    BigInt res = luaZ_bigint_mul(L, bb, bc);
                     setbigintvalue(ra, res);
                     VM_NEXT();
                 }
@@ -1950,7 +1950,7 @@ reentry:
                 {
                     BigInt bb = bigintvalue(rb);
                     BigInt bc = bigintvalue(rc);
-                    BigInt res = lua_bigint_div(L, bb, bc);
+                    BigInt res = luaZ_bigint_div(L, bb, bc);
                     setbigintvalue(ra, res);
                     VM_NEXT();
                 }
@@ -2074,7 +2074,7 @@ reentry:
                 {
                     BigInt bb = bigintvalue(rb);
                     BigInt bc = bigintvalue(rc);
-                    BigInt res = lua_bigint_mod(L, bb, bc);
+                    BigInt res = luaZ_bigint_mod(L, bb, bc);
                     setbigintvalue(ra, res);
                     VM_NEXT();
                 }
