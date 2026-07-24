@@ -1,1 +1,1 @@
-print(typeof(100u32))
+print(-1u32, -1u64)

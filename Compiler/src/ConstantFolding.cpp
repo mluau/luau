@@ -75,7 +75,18 @@ static void foldUnary(Constant& result, AstExprUnary::Op op, const Constant& arg
         else if (arg.type == Constant::Type_Integer)
         {
             result.type = Constant::Type_Integer;
-            result.valueInteger64 = (int64_t)(~(uint64_t)arg.valueInteger64 + 1);
+            int64_t val = (int64_t)(~(uint64_t)arg.valueInteger64 + 1);
+            switch (arg.mode) {
+                case 1: val = (int64_t)(int8_t)val; break;
+                case 2: val = (int64_t)(uint64_t)(uint8_t)val; break;
+                case 3: val = (int64_t)(int16_t)val; break;
+                case 4: val = (int64_t)(uint64_t)(uint16_t)val; break;
+                case 5: val = (int64_t)(int32_t)val; break;
+                case 6: val = (int64_t)(uint64_t)(uint32_t)val; break;
+                case 7: val = (int64_t)(int64_t)val; break;
+                case 8: val = (int64_t)(uint64_t)val; break;
+            }
+            result.valueInteger64 = val;
             result.mode = arg.mode;
         }
         else if (arg.type == Constant::Type_Vector)

@@ -522,6 +522,23 @@ static Integer integer_rem_impl(lua_State* L, Integer a, Integer b)
 static Integer integer_neg_impl(lua_State* L, Integer a)
 {
     if (!a.heap) {
+        if (a.mode != IntegerMode_Dynamic) {
+            uint64_t va = internal_get_bottom_64(a);
+            uint64_t res = 0;
+            switch (a.mode) {
+                case IntegerMode_I8: res = (int64_t)(int8_t)-(int8_t)va; break;
+                case IntegerMode_U8: res = (uint64_t)(uint8_t)-(uint8_t)va; break;
+                case IntegerMode_I16: res = (int64_t)(int16_t)-(int16_t)va; break;
+                case IntegerMode_U16: res = (uint64_t)(uint16_t)-(uint16_t)va; break;
+                case IntegerMode_I32: res = (int64_t)(int32_t)-(int32_t)va; break;
+                case IntegerMode_U32: res = (uint64_t)(uint32_t)-(uint32_t)va; break;
+                case IntegerMode_I64: res = (int64_t)(int64_t)-(int64_t)va; break;
+                case IntegerMode_U64: res = (uint64_t)(uint64_t)-(uint64_t)va; break;
+                default: break;
+            }
+            return new_integer((int64_t)res, a.mode);
+        }
+        
         if (a.smi == INT64_MIN) {
             // Overflows SMI, fallback to HeapInteger
             HeapInteger* res = lua_newheapinteger(L, 3);
