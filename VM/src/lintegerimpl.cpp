@@ -156,7 +156,35 @@ static IntegerView get_view(const Integer& b, uint32_t temp[2]) {
 
 bool luaZ_integer_eq(const TValue* a_val, const TValue* b_val)
 {
+    if (a_val->extra[0] != b_val->extra[0]) return false;
     Integer a = unpack_integer(a_val);
+    Integer b = unpack_integer(b_val);
+    uint32_t ta[2], tb[2];
+    IntegerView va = get_view(a, ta);
+    IntegerView vb = get_view(b, tb);
+
+    if (va.size != vb.size) return false;
+    if (va.size == 0) return true;
+    if (va.isNegative != vb.isNegative) return false;
+    return memcmp(va.digits, vb.digits, va.size * sizeof(uint32_t)) == 0;
+}
+
+bool luaZ_integer_eq_key(const TKey* a_key, const TValue* b_val)
+{
+    if (a_key->extra[0] != b_val->extra[0]) return false;
+    Integer a;
+    if (a_key->tt == LUA_TINTEGER)
+    {
+        a.smi = a_key->value.l;
+        a.heap = nullptr;
+    }
+    else // LUA_THEAPINTEGER
+    {
+        a.smi = 0;
+        a.heap = (HeapInteger*)a_key->value.gc;
+    }
+    a.mode = (IntegerMode)a_key->extra[0];
+
     Integer b = unpack_integer(b_val);
     uint32_t ta[2], tb[2];
     IntegerView va = get_view(a, ta);
@@ -174,7 +202,8 @@ uint32_t luaZ_integer_hash(const TValue* b_val)
     uint32_t t[2];
     IntegerView v = get_view(b, t);
     
-    uint32_t h = v.size ^ (v.isNegative ? 0x80000000 : 0);
+    uint32_t mode = b_val->extra[0];
+    uint32_t h = v.size ^ (v.isNegative ? 0x80000000 : 0) ^ (mode << 16);
     const uint32_t m = 0x5bd1e995;
     const int r = 24;
     

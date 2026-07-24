@@ -45,7 +45,7 @@ static bool constantsEqual(const Constant& la, const Constant& ra)
 
     case Constant::Type_Integer:
         if (FFlag::LuauIntegerType2)
-            return ra.type == Constant::Type_Integer && la.valueInteger64 == ra.valueInteger64;
+            return ra.type == Constant::Type_Integer && la.valueInteger64 == ra.valueInteger64 && la.mode == ra.mode;
         [[fallthrough]];
 
     default:

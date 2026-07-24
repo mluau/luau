@@ -18,8 +18,8 @@ The upstream `LUA_TINTEGER` type will be removed and replaced with `LUA_TINTEGER
 
 To maintain performance, `integer` values use a **Small Integer (SMI)** optimization:
 
-* **Inline (<= 64-bit):** Fits within a 64-bit payload, stored directly inline within the VM's value.
-* **Heap (Overflow):** Values dynamically promote to a heap-allocated, garbage-collected object containing a sign flag and an array of 32-bit digits (similar to V8's Integer representation).
+- **Inline (<= 64-bit):** Fits within a 64-bit payload, stored directly inline within the VM's value.
+- **Heap (Overflow):** Values dynamically promote to a heap-allocated, garbage-collected object containing a sign flag and an array of 32-bit digits (similar to V8's Integer representation).
 
 **Typed Modes:**
 The `TValue` structural `extra[0]` payload is utilized to mark explicitly typed `integer` modes with zero memory overhead. A `IntegerMode` enum distinguishes between untyped/dynamic integers (which can be promoted to the heap) and explicitly typed bounds (`u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`). 
@@ -30,23 +30,23 @@ By default, mathematical operations on typed integers **wrap on overflow** to en
 
 A compliant implementation must support the following core operations on `integer` values:
 
-* `integer + integer -> integer`: Addition
-* `integer - integer -> integer`: Subtraction
-* `integer * integer -> integer`: Multiplication
-* `integer / integer -> integer`: Division
-* `integer % integer -> integer`: Modulo
-* `-integer -> integer`: Negation
-* `integer < integer -> boolean`: Less than
-* `integer <= integer -> boolean`: Less than or equal
-* `integer > integer -> boolean`: Greater than
-* `integer >= integer -> boolean`: Greater than or equal
+- `integer + integer -> integer`: Addition
+- `integer - integer -> integer`: Subtraction
+- `integer * integer -> integer`: Multiplication
+- `integer / integer -> integer`: Division
+- `integer % integer -> integer`: Modulo
+- `-integer -> integer`: Negation
+- `integer < integer -> boolean`: Less than
+- `integer <= integer -> boolean`: Less than or equal
+- `integer > integer -> boolean`: Greater than
+- `integer >= integer -> boolean`: Greater than or equal
 
 ### Language & Standard Library
 
-* **Literals:** Constructed using either typed suffixes (`u8` through `u64` and `i8` through `i64`) or the `i` suffix (e.g., `123i`) for dynamic/untyped integers, maintaining compatibility with upstream Luau.
-* **Mixed Math:** Mixing `integer` and `number` (e.g., `123i + 1.5`) throws a runtime type error. An `integer` will also never equal a `number`
-* **Type System:** A `integer` primitive type will be added to the typechecker along with the subtyped integers as dedicated nominal types
-* **Type & String Conversion:** Calling `type()` on a integer returns `"integer"`. Calling `typeof()` on an integer returns either the subtype of the integer or `integer` for untyped integers. Calling `tostring()` returns the string representation of the integer without any suffix (e.g., `"123"`, not `"123i"`).
+- **Literals:** Constructed using either typed suffixes (`u8` through `u64` and `i8` through `i64`) or the `n` suffix (e.g., `123i`) for dynamic/untyped integers. For maintaining compatibility with upstream Luau, the `i` suffix is also supported and subtypes to `i64`
+- **Mixed Math:** Mixing `integer` and `number` (e.g., `123i + 1.5`) throws a runtime type error. An `integer` will also never equal a `number`
+- **Type System:** A `integer` primitive type will be added to the typechecker along with the subtyped integers as dedicated nominal types
+- **Type & String Conversion:** Calling `type()` on a integer returns `"integer"`. Calling `typeof()` on an integer returns either the subtype of the integer or `integer` for untyped integers. Calling `tostring()` returns the string representation of the integer without any suffix (e.g., `"123"`, not `"123i"`).
 
 ### Integer Library
 
@@ -127,9 +127,9 @@ Returns the saturating addition of `a` and `b` up to `max`.
 
 ## Drawbacks
 
-* **VM Complexity:** Adding branch checks for `LUA_TINTEGER` in the execution loop slightly increases complexity.
-* **Maintenance:** A custom arbitrary-precision bignum library requires careful testing and long-term maintenance.
+- **VM Complexity:** Adding branch checks for `LUA_TINTEGER` in the execution loop slightly increases complexity.
+- **Maintenance:** A custom arbitrary-precision bignum library requires careful testing and long-term maintenance.
 
 ## Alternatives
 
-* **Userdata Wrapping:** Host applications could implement Integers via `userdata`, but this suffers from performance degradation, forces heap allocations for all math, and lacks typechecker support.
+- **Userdata Wrapping:** Host applications could implement Integers via `userdata`, but this suffers from performance degradation, forces heap allocations for all math, and lacks typechecker support.

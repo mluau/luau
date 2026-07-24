@@ -72,7 +72,7 @@ int luaO_rawequalKey(const TKey* t1, const TValue* t2)
             return luai_numeq(nvalue(t1), nvalue(t2));
         case LUA_TINTEGER:
         case LUA_THEAPINTEGER:
-            return luaZ_integer_eq(reinterpret_cast<const TValue*>(t1), t2);
+            return luaZ_integer_eq_key(t1, t2);
         case LUA_TVECTOR:
             return luai_veceq(vvalue(t1), vvalue(t2));
         case LUA_TBOOLEAN:

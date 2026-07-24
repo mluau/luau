@@ -1481,7 +1481,7 @@ reentry:
                     case LUA_TINTEGER:
                         if (FFlag::LuauInteger)
                         {
-                            pc += ra->value.l == rb->value.l ? LUAU_INSN_D(insn) : 1;
+                            pc += (ra->value.l == rb->value.l && ra->extra[0] == rb->extra[0]) ? LUAU_INSN_D(insn) : 1;
                             VM_ASSERT_PC(pc);
                             VM_NEXT();
                         }
@@ -1621,7 +1621,7 @@ reentry:
                     case LUA_TINTEGER:
                         if (FFlag::LuauInteger)
                         {
-                            pc += ra->value.l != rb->value.l ? LUAU_INSN_D(insn) : 1;
+                            pc += (ra->value.l != rb->value.l || ra->extra[0] != rb->extra[0]) ? LUAU_INSN_D(insn) : 1;
                             VM_ASSERT_PC(pc);
                             VM_NEXT();
                         }

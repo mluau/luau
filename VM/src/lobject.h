@@ -527,6 +527,8 @@ typedef struct TKey
     int next : 28; // for chaining
 } TKey;
 
+bool luaZ_integer_eq_key(const TKey* a, const TValue* b);
+
 typedef struct LuaNode
 {
     TValue val;
