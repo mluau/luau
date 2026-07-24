@@ -96,8 +96,7 @@ LUAU_FASTFLAGVARIABLE(LuauPromoteProto)
         } \
     }
 
-static const uint8_t luau_int_shifts[9] = { 0, 56, 56, 48, 48, 32, 32, 0, 0 };
-static const bool luau_int_signed[9] = { false, true, false, true, false, true, false, true, false };
+
 
 #define LUAU_FAST_TYPED_MATH(OP, BUILTIN_OP, FALLBACK) \
     do { \

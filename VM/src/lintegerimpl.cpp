@@ -65,9 +65,6 @@ uint64_t luaZ_integer_get_bottom_64(const TValue* o) {
     return internal_get_bottom_64(unpack_integer(o));
 }
 
-#define DO_TYPED_MATH(TYPE, UTYPE, OP) { res = (int64_t)(TYPE)((UTYPE)va OP (UTYPE)vb); }
-#define DO_TYPED_UMATH(UTYPE, OP) { res = (uint64_t)(UTYPE)((UTYPE)va OP (UTYPE)vb); }
-
 #define HANDLE_TYPED_MATH(L, a, b, OP) \
     if (a.mode != IntegerMode_Dynamic || b.mode != IntegerMode_Dynamic) { \
         if (a.mode != b.mode) { \
@@ -76,18 +73,13 @@ uint64_t luaZ_integer_get_bottom_64(const TValue* o) {
         IntegerMode mode = a.mode; \
         uint64_t va = internal_get_bottom_64(a); \
         uint64_t vb = internal_get_bottom_64(b); \
+        uint64_t raw_res = va OP vb; \
+        uint8_t shift = luau_int_shifts[mode]; \
         uint64_t res = 0; \
-        switch (mode) { \
-            case IntegerMode_I8: DO_TYPED_MATH(int8_t, uint8_t, OP); break; \
-            case IntegerMode_U8: DO_TYPED_UMATH(uint8_t, OP); break; \
-            case IntegerMode_I16: DO_TYPED_MATH(int16_t, uint16_t, OP); break; \
-            case IntegerMode_U16: DO_TYPED_UMATH(uint16_t, OP); break; \
-            case IntegerMode_I32: DO_TYPED_MATH(int32_t, uint32_t, OP); break; \
-            case IntegerMode_U32: DO_TYPED_UMATH(uint32_t, OP); break; \
-            case IntegerMode_I64: DO_TYPED_MATH(int64_t, uint64_t, OP); break; \
-            case IntegerMode_U64: DO_TYPED_UMATH(uint64_t, OP); break; \
-            default: break; \
-        } \
+        if (luau_int_signed[mode]) \
+            res = (int64_t)(raw_res << shift) >> shift; \
+        else \
+            res = (raw_res << shift) >> shift; \
         return new_integer((int64_t)res, mode); \
     }
 

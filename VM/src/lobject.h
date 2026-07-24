@@ -349,6 +349,9 @@ void lua_pushinteger_string(lua_State* L, const TValue* b);
 
 void lua_freeinteger(lua_State* L, HeapInteger* h, struct lua_Page* page);
 
+static const uint8_t luau_int_shifts[9] = { 0, 56, 56, 48, 48, 32, 32, 0, 0 };
+static const bool luau_int_signed[9] = { false, true, false, true, false, true, false, true, false };
+
 inline void setintegersmi(TValue* obj, int64_t smi, IntegerMode mode) {
     obj->value.l = smi;
     obj->tt = LUA_TINTEGER;
