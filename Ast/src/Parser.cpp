@@ -3978,21 +3978,23 @@ static ConstantNumberParseResult parseInteger64(int64_t& result, const char* dat
 
     if (base == 10)
     {
-        result = strtoll(data, &end, 10);
+        unsigned long long u = strtoull(data, &end, 10);
 
         if (end == data || *end != '\0')
             return ConstantNumberParseResult::Malformed;
 
-        if (((result == LLONG_MIN) || (result == LLONG_MAX)) && (errno == ERANGE))
+        if ((u == ULLONG_MAX) && (errno == ERANGE))
         {
-            // 'errno' might have been set before we called 'strtoll', but we don't want the overhead of resetting a TLS variable on each call
+            // 'errno' might have been set before we called 'strtoull', but we don't want the overhead of resetting a TLS variable on each call
             // so we only reset it when we get a result that might be an out-of-range error and parse again to make sure
             errno = 0;
-            result = strtoll(data, &end, 10);
+            u = strtoull(data, &end, 10);
 
             if (errno == ERANGE)
                 return ConstantNumberParseResult::IntOverflow;
         }
+
+        result = (int64_t)u;
     }
     else
     {
@@ -5039,7 +5041,7 @@ AstExpr* Parser::parseNumber()
     const SuffixMap intSuffixes[] = {
         {"i8", 1}, {"u8", 2}, {"i16", 3}, {"u16", 4}, 
         {"i32", 5}, {"u32", 6}, {"i64", 7}, {"u64", 8}, 
-        {"i", 0}, {"u", 0}
+        {"i", 7}, {"n", 0}
     };
 
     for (const auto& suffix : intSuffixes)
