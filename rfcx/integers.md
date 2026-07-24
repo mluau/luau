@@ -14,7 +14,7 @@ Luau numbers are IEEE 754 doubles, which lose precision beyond `2^53 - 1`. There
 
 ### Object Representation & SMI
 
-The upstream `LUA_TINTEGER` type will be removed and replaced with `LUA_TINTEGER`. 
+The upstream `LUA_TINTEGER` type will be removed and replaced with `LUA_TINTEGER`. `LUA_THEAPINTEGER` will be added for the arbitrary precision case. 
 
 To maintain performance, `integer` values use a **Small Integer (SMI)** optimization:
 
@@ -22,14 +22,9 @@ To maintain performance, `integer` values use a **Small Integer (SMI)** optimiza
 * **Heap (Overflow):** Values dynamically promote to a heap-allocated, garbage-collected object containing a sign flag and an array of 32-bit digits (similar to V8's Integer representation).
 
 **Typed Modes:**
-The `TValue` structural `extra[0]` payload is utilized to mark explicitly typed `integer` modes with zero memory overhead. A `IntegerMode` enum distinguishes between untyped/dynamic Integers (which can grow to the heap) and explicitly typed bounds (`u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`). 
+The `TValue` structural `extra[0]` payload is utilized to mark explicitly typed `integer` modes with zero memory overhead. A `IntegerMode` enum distinguishes between untyped/dynamic integers (which can be promoted to the heap) and explicitly typed bounds (`u8`, `i8`, `u16`, `i16`, `u32`, `i32`, `u64`, `i64`). 
 
-By default, mathematical operations on typed integers **wrap on overflow** to ensure maximum type safety. 
-
-**Mode Propagation Rules:**
-When performing binary operations (e.g., `+`, `-`, `*`) on integers:
-1. **Same Typed Modes (e.g. `u16 + u16`)**: Operations are performed explicitly within that bounded type and return a integer of the same typed mode.
-2. **Mixed Typed Modes (e.g. `u16 + u32`, `u32 + dynamic`)**: Throws a runtime type error requiring the user to explicitly cast them to identical types. This strictly enforces type safety.
+By default, mathematical operations on typed integers **wrap on overflow** to ensure type safety while also maintaining performance. Operations can only be performed on typed integers of the same type (casting between integer subtypes is allowed and also wraps).
 
 ### Arithmetic & Relational Operations
 
@@ -46,20 +41,13 @@ A compliant implementation must support the following core operations on `intege
 * `integer > integer -> boolean`: Greater than
 * `integer >= integer -> boolean`: Greater than or equal
 
-**Fast-Path:** If both operands are inline 64-bit integers, the VM performs fast hardware math, checking for overflow.
-
-**Slow-Path:** If an overflow occurs, or an operand is heap-allocated, it dispatches to a new arbitrary-precision library.
-
-### Native Code Generation (NCG)
-
-NCG will only emit optimized fast-paths for inline 64-bit integers. Non-int64 cases or overflows will safely fall back to the VM's slow path.
-
 ### Language & Standard Library
 
-* **Literals:** Constructed using the `i` suffix (e.g., `123i`), maintaining compatibility with `FFlag::LuauIntegerType2`.
-* **Mixed Math:** Mixing `integer` and `number` (e.g., `123i + 1.5`) throws a runtime type error to prevent precision loss.
-* **Type System:** A `integer` primitive type will be added to the typechecker.
-* **Type & String Conversion:** Calling `type()` on a integer returns `"integer"`. Calling `tostring()` returns the string representation of the integer without any suffix (e.g., `"123"`, not `"123i"`).
+* **Literals:** Constructed using either typed suffixes (`u8` through `u64` and `i8` through `i64`) or the `i` suffix (e.g., `123i`) for dynamic/untyped integers, maintaining compatibility with upstream Luau.
+* **Mixed Math:** Mixing `integer` and `number` (e.g., `123i + 1.5`) throws a runtime type error. An `integer` will also never equal a `number`
+* **Type System:** A `integer` primitive type will be added to the typechecker along with the subtyped integers as dedicated nominal types
+* **Type & String Conversion:** Calling `type()` on a integer returns `"integer"`. Calling `typeof()` on an integer returns either the subtype of the integer or `integer` for untyped integers. Calling `tostring()` returns the string representation of the integer without any suffix (e.g., `"123"`, not `"123i"`).
+
 ### Integer Library
 
 A `integer` standard library will be provided with the following methods:
@@ -76,7 +64,6 @@ Coerces a typed integer back into a standard untyped/arbitrary-precision integer
 - `integer.u32(n)`: Same as above but bounds as unsigned 32-bit integer.
 - `integer.i64(n)`: Same as above but bounds as signed 64-bit integer.
 - `integer.u64(n)`: Same as above but bounds as unsigned 64-bit integer.
-- `integer.wi8(n)`, `integer.wu8(n)`, `integer.wi16(n)`, `integer.wu16(n)`, `integer.wi32(n)`, `integer.wu32(n)`, `integer.wi64(n)`, `integer.wu64(n)`: Same as the respective bounds, but mathematical operations on these types will implicitly wrap instead of throwing an overflow error.
 
 `function integer.min(...: integer): integer`
 
