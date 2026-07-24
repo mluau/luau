@@ -1794,10 +1794,10 @@ BuiltinImplResult translateBuiltin(
         case LBF_INTEGER_ULE:
         case LBF_INTEGER_UGT:
         case LBF_INTEGER_UGE:
-            if (!isCompatibleConstant(build, args, IrConstKind::Int64))
+            if (!isCompatibleConstant(build, build.vmReg(arg), IrConstKind::Int64))
                 return {BuiltinImplType::None, -1};
 
-            if (!isCompatibleConstant(build, arg3, IrConstKind::Int64))
+            if (!isCompatibleConstant(build, args, IrConstKind::Int64))
                 return {BuiltinImplType::None, -1};
 
             break;
