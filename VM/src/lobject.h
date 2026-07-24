@@ -338,6 +338,8 @@ void luaZ_integer_mod(lua_State* L, const TValue* a, const TValue* b, TValue* re
 void luaZ_integer_rem(lua_State* L, const TValue* a, const TValue* b, TValue* res);
 void luaZ_integer_neg(lua_State* L, const TValue* a, TValue* res);
 
+bool luaZ_integer_lt(lua_State* L, const TValue* a, const TValue* b);
+bool luaZ_integer_le(lua_State* L, const TValue* a, const TValue* b);
 bool luaZ_integer_eq(const TValue* a, const TValue* b);
 uint32_t luaZ_integer_hash(const TValue* b);
 LUAI_FUNC uint64_t luaZ_integer_get_bottom_64(const TValue* b);

@@ -96,34 +96,33 @@ LUAU_FASTFLAGVARIABLE(LuauPromoteProto)
         } \
     }
 
+static const uint8_t luau_int_shifts[9] = { 0, 56, 56, 48, 48, 32, 32, 0, 0 };
+static const bool luau_int_signed[9] = { false, true, false, true, false, true, false, true, false };
+
 #define LUAU_FAST_TYPED_MATH(OP, BUILTIN_OP, FALLBACK) \
     do { \
         uint64_t va = rb->value.l; \
         uint64_t vb = rc->value.l; \
         uint64_t res = 0; \
-        switch (rb->extra[0]) { \
-            case IntegerMode_Dynamic: { \
-                int64_t sres; \
-                if (!BUILTIN_OP((int64_t)va, (int64_t)vb, &sres)) { \
-                    setintegersmi(ra, sres, IntegerMode_Dynamic); \
-                    VM_NEXT(); \
-                } else { \
-                    FALLBACK(L, rb, rc, ra); \
-                    VM_NEXT(); \
-                } \
+        if (LUAU_UNLIKELY(rb->extra[0] == IntegerMode_Dynamic)) { \
+            int64_t sres; \
+            if (!BUILTIN_OP((int64_t)va, (int64_t)vb, &sres)) { \
+                setintegersmi(ra, sres, IntegerMode_Dynamic); \
+                VM_NEXT(); \
+            } else { \
+                FALLBACK(L, rb, rc, ra); \
+                VM_NEXT(); \
             } \
-            case IntegerMode_I8: res = (int64_t)(int8_t)((uint8_t)va OP (uint8_t)vb); break; \
-            case IntegerMode_U8: res = (uint64_t)(uint8_t)((uint8_t)va OP (uint8_t)vb); break; \
-            case IntegerMode_I16: res = (int64_t)(int16_t)((uint16_t)va OP (uint16_t)vb); break; \
-            case IntegerMode_U16: res = (uint64_t)(uint16_t)((uint16_t)va OP (uint16_t)vb); break; \
-            case IntegerMode_I32: res = (int64_t)(int32_t)((uint32_t)va OP (uint32_t)vb); break; \
-            case IntegerMode_U32: res = (uint64_t)(uint32_t)((uint32_t)va OP (uint32_t)vb); break; \
-            case IntegerMode_I64: res = (int64_t)(int64_t)((uint64_t)va OP (uint64_t)vb); break; \
-            case IntegerMode_U64: res = (uint64_t)(uint64_t)((uint64_t)va OP (uint64_t)vb); break; \
-            default: LUAU_UNREACHABLE(); \
+        } else { \
+            uint64_t raw_res = va OP vb; \
+            uint8_t shift = luau_int_shifts[rb->extra[0]]; \
+            if (luau_int_signed[rb->extra[0]]) \
+                res = (int64_t)(raw_res << shift) >> shift; \
+            else \
+                res = (raw_res << shift) >> shift; \
+            setintegersmi(ra, res, (IntegerMode)rb->extra[0]); \
+            VM_NEXT(); \
         } \
-        setintegersmi(ra, res, (IntegerMode)rb->extra[0]); \
-        VM_NEXT(); \
     } while (0)
 
 #define VM_DISPATCH_OP(op) &&CASE_##op

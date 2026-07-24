@@ -48,6 +48,38 @@ INTEGER_MODE_WRAP(u32, IntegerMode_U32, uint32_t, true)
 INTEGER_MODE_WRAP(i64, IntegerMode_I64, int64_t, false)
 INTEGER_MODE_WRAP(u64, IntegerMode_U64, uint64_t, true)
 
+static int integer_add(lua_State* L) {
+    const TValue* a = check_integer(L, 1);
+    const TValue* b = check_integer(L, 2);
+    luaZ_integer_add(L, a, b, L->top);
+    L->top++;
+    return 1;
+}
+
+static int integer_sub(lua_State* L) {
+    const TValue* a = check_integer(L, 1);
+    const TValue* b = check_integer(L, 2);
+    luaZ_integer_sub(L, a, b, L->top);
+    L->top++;
+    return 1;
+}
+
+static int integer_mul(lua_State* L) {
+    const TValue* a = check_integer(L, 1);
+    const TValue* b = check_integer(L, 2);
+    luaZ_integer_mul(L, a, b, L->top);
+    L->top++;
+    return 1;
+}
+
+static int integer_div(lua_State* L) {
+    const TValue* a = check_integer(L, 1);
+    const TValue* b = check_integer(L, 2);
+    luaZ_integer_div(L, a, b, L->top);
+    L->top++;
+    return 1;
+}
+
 static const luaL_Reg integerlib[] = {
     {"fromstring", integer_fromstring},
     {"dynamic", integer_dynamic},
@@ -59,6 +91,10 @@ static const luaL_Reg integerlib[] = {
     {"u32", integer_u32},
     {"i64", integer_i64},
     {"u64", integer_u64},
+    {"add", integer_add},
+    {"sub", integer_sub},
+    {"mul", integer_mul},
+    {"div", integer_div},
     {NULL, NULL},
 };
 

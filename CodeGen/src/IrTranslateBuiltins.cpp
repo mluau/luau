@@ -1390,6 +1390,7 @@ static BuiltinImplResult translateBuiltinInt64Binary(
 
     build.inst(IrCmd::STORE_INT64, build.vmReg(ra), binOp);
     build.inst(IrCmd::STORE_TAG, build.vmReg(ra), build.constTag(LUA_TINTEGER));
+    build.inst(IrCmd::STORE_EXTRA, build.vmReg(ra), build.constInt(0));
 
     return {BuiltinImplType::Full, 1};
 }
@@ -1781,6 +1782,26 @@ BuiltinImplResult translateBuiltin(
 
             break;
 
+        case LBF_INTEGER_ADD:
+        case LBF_INTEGER_SUB:
+        case LBF_INTEGER_MUL:
+        case LBF_INTEGER_DIV:
+        case LBF_INTEGER_LT:
+        case LBF_INTEGER_LE:
+        case LBF_INTEGER_GT:
+        case LBF_INTEGER_GE:
+        case LBF_INTEGER_ULT:
+        case LBF_INTEGER_ULE:
+        case LBF_INTEGER_UGT:
+        case LBF_INTEGER_UGE:
+            if (!isCompatibleConstant(build, args, IrConstKind::Int64))
+                return {BuiltinImplType::None, -1};
+
+            if (!isCompatibleConstant(build, arg3, IrConstKind::Int64))
+                return {BuiltinImplType::None, -1};
+
+            break;
+
 
         }
     }
@@ -1931,6 +1952,14 @@ BuiltinImplResult translateBuiltin(
         return translateBuiltinMathLerp(build, nparams, ra, arg, args, arg3, nresults, fallback, pcpos);
     case LBF_MATH_ISNAN:
         return translateBuiltinMathIsNan(build, nparams, ra, arg, args, nresults, pcpos);
+    case LBF_INTEGER_ADD:
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Add);
+    case LBF_INTEGER_SUB:
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Sub);
+    case LBF_INTEGER_MUL:
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Mul);
+    case LBF_INTEGER_DIV:
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Div);
     default:
         return {BuiltinImplType::None, -1};
     }

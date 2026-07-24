@@ -152,6 +152,7 @@ void IrValueLocationTracking::beforeInstLowering(IrInst& inst)
 
         // Make sure all VmReg referencing instructions are handled explicitly (only register reads here)
     case IrCmd::LOAD_TAG:
+    case IrCmd::LOAD_EXTRA:
     case IrCmd::LOAD_POINTER:
     case IrCmd::LOAD_DOUBLE:
     case IrCmd::LOAD_INT64:
@@ -215,6 +216,7 @@ void IrValueLocationTracking::afterInstLowering(IrInst& inst, uint32_t instIdx)
     switch (inst.cmd)
     {
     case IrCmd::LOAD_TAG:
+    case IrCmd::LOAD_EXTRA:
     case IrCmd::LOAD_POINTER:
     case IrCmd::LOAD_DOUBLE:
     case IrCmd::LOAD_INT:

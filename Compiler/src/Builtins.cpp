@@ -226,6 +226,18 @@ static int getBuiltinFunctionId(const Builtin& builtin, const CompileOptions& op
             return LBF_TABLE_UNPACK;
     }
 
+    if (builtin.object == "integer")
+    {
+        if (builtin.method == "add")
+            return LBF_INTEGER_ADD;
+        if (builtin.method == "sub")
+            return LBF_INTEGER_SUB;
+        if (builtin.method == "mul")
+            return LBF_INTEGER_MUL;
+        if (builtin.method == "div")
+            return LBF_INTEGER_DIV;
+    }
+
     if (builtin.object == "buffer")
     {
         if (builtin.method == "readi8")

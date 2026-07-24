@@ -313,6 +313,8 @@ int luaV_lessthan(lua_State* L, const TValue* l, const TValue* r)
         luaG_ordererror(L, l, r, TM_LT);
     else if (LUAU_LIKELY(ttisnumber(l)))
         return luai_numlt(nvalue(l), nvalue(r));
+    else if (ttisinteger(l))
+        return luaZ_integer_lt(L, l, r);
     else if (ttisstring(l))
         return luaV_strcmp(tsvalue(l), tsvalue(r)) < 0;
     else
@@ -326,6 +328,8 @@ int luaV_lessequal(lua_State* L, const TValue* l, const TValue* r)
         luaG_ordererror(L, l, r, TM_LE);
     else if (ttisnumber(l))
         return luai_numle(nvalue(l), nvalue(r));
+    else if (ttisinteger(l))
+        return luaZ_integer_le(L, l, r);
     else if (ttisstring(l))
         return luaV_strcmp(tsvalue(l), tsvalue(r)) <= 0;
     else if ((res = call_orderTM(L, l, r, TM_LE)) != -1) // first try `le'

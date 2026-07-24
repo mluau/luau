@@ -71,6 +71,13 @@ void IrLoweringX64::lowerInst(IrInst& inst, uint32_t index, const IrBlock& next)
         else
             CODEGEN_ASSERT(!"Unsupported instruction form");
         break;
+    case IrCmd::LOAD_EXTRA:
+        inst.regX64 = regs.allocReg(SizeX64::dword, index);
+        if (OP_A(inst).kind == IrOpKind::VmReg)
+            build.mov(inst.regX64, luauRegExtra(vmRegOp(OP_A(inst))));
+        else
+            CODEGEN_ASSERT(!"Unsupported instruction form");
+        break;
     case IrCmd::LOAD_POINTER:
         inst.regX64 = regs.allocReg(SizeX64::qword, index);
 
@@ -253,6 +260,13 @@ void IrLoweringX64::lowerInst(IrInst& inst, uint32_t index, const IrBlock& next)
                 build.mov(dword[regOp(OP_A(inst)) + offsetof(TValue, extra)], intOp(OP_B(inst)));
             else
                 build.mov(luauRegExtra(vmRegOp(OP_A(inst))), intOp(OP_B(inst)));
+        }
+        else if (OP_B(inst).kind == IrOpKind::Inst)
+        {
+            if (OP_A(inst).kind == IrOpKind::Inst)
+                build.mov(dword[regOp(OP_A(inst)) + offsetof(TValue, extra)], regOp(OP_B(inst)));
+            else
+                build.mov(luauRegExtra(vmRegOp(OP_A(inst))), regOp(OP_B(inst)));
         }
         else
         {

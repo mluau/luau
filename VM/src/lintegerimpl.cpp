@@ -706,3 +706,47 @@ void lua_pushinteger_string(lua_State* L, const TValue* b_val) {
     Integer b = unpack_integer(b_val);
     integer_push_string_impl(L, b);
 }
+
+bool luaZ_integer_lt(lua_State* L, const TValue* a_val, const TValue* b_val)
+{
+    Integer a = unpack_integer(a_val);
+    Integer b = unpack_integer(b_val);
+    if (a.mode != b.mode)
+        luaG_runerror(L, "attempt to compare mixed typed integers");
+        
+    uint32_t ta[2], tb[2];
+    IntegerView va = get_view(a, ta);
+    IntegerView vb = get_view(b, tb);
+    
+    if (va.size == 0 && vb.size == 0) return false;
+    if (va.isNegative && !vb.isNegative) return true;
+    if (!va.isNegative && vb.isNegative) return false;
+    
+    int cmp = cmp_abs(va, vb);
+    if (va.isNegative)
+        return cmp > 0;
+    else
+        return cmp < 0;
+}
+
+bool luaZ_integer_le(lua_State* L, const TValue* a_val, const TValue* b_val)
+{
+    Integer a = unpack_integer(a_val);
+    Integer b = unpack_integer(b_val);
+    if (a.mode != b.mode)
+        luaG_runerror(L, "attempt to compare mixed typed integers");
+        
+    uint32_t ta[2], tb[2];
+    IntegerView va = get_view(a, ta);
+    IntegerView vb = get_view(b, tb);
+    
+    if (va.size == 0 && vb.size == 0) return true;
+    if (va.isNegative && !vb.isNegative) return true;
+    if (!va.isNegative && vb.isNegative) return false;
+    
+    int cmp = cmp_abs(va, vb);
+    if (va.isNegative)
+        return cmp >= 0;
+    else
+        return cmp <= 0;
+}

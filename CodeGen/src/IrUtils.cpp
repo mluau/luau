@@ -149,6 +149,8 @@ IrValueKind getCmdValueKind(IrCmd cmd)
         return IrValueKind::None;
     case IrCmd::LOAD_TAG:
         return IrValueKind::Tag;
+    case IrCmd::LOAD_EXTRA:
+        return IrValueKind::Int;
     case IrCmd::LOAD_POINTER:
         return IrValueKind::Pointer;
     case IrCmd::LOAD_DOUBLE:

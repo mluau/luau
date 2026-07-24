@@ -1468,12 +1468,26 @@ static void handleBuiltinEffects(ConstPropState& state, LuauBuiltinFunction bfid
     case LBF_MATH_ISNAN:
     case LBF_MATH_ISINF:
     case LBF_MATH_ISFINITE:
+    case LBF_INTEGER_ADD:
+    case LBF_INTEGER_SUB:
+    case LBF_INTEGER_MUL:
+    case LBF_INTEGER_DIV:
+    case LBF_INTEGER_LT:
+    case LBF_INTEGER_LE:
+    case LBF_INTEGER_ULT:
+    case LBF_INTEGER_ULE:
+    case LBF_INTEGER_GT:
+    case LBF_INTEGER_GE:
+    case LBF_INTEGER_UGT:
+    case LBF_INTEGER_UGE:
+    case LBF_BUFFER_READLONG:
         break;
     case LBF_BUFFER_WRITEU8:
     case LBF_BUFFER_WRITEU16:
     case LBF_BUFFER_WRITEU32:
     case LBF_BUFFER_WRITEF32:
     case LBF_BUFFER_WRITEF64:
+    case LBF_BUFFER_WRITELONG:
         state.invalidateHeapBufferData();
         break;
     case LBF_TABLE_INSERT:

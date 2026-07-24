@@ -51,6 +51,21 @@ static IrOp getInitializedFallback(IrBuilder& build, IrOp& fallback, int pcpos)
     return fallback;
 }
 
+static IrOp loadInt64OrConstant(IrBuilder& build, IrOp arg)
+{
+    if (arg.kind == IrOpKind::VmConst)
+    {
+        CODEGEN_ASSERT(build.function.proto);
+        TValue protok = build.function.proto->k[vmConstOp(arg)];
+
+        CODEGEN_ASSERT(protok.tt == LUA_TINTEGER);
+
+        return build.constInt64(protok.value.l);
+    }
+
+    return build.inst(IrCmd::LOAD_INT64, arg);
+}
+
 static IrOp loadDoubleOrConstant(IrBuilder& build, IrOp arg)
 {
     if (arg.kind == IrOpKind::VmConst)
@@ -110,6 +125,7 @@ static void translateInstLoadConstant(IrBuilder& build, int ra, int k)
     {
         build.inst(IrCmd::STORE_INT64, build.vmReg(ra), build.constInt64(protok.value.l));
         build.inst(IrCmd::STORE_TAG, build.vmReg(ra), build.constTag(LUA_TINTEGER));
+        build.inst(IrCmd::STORE_EXTRA, build.vmReg(ra), build.constInt(protok.extra[0]));
     }
     else if (protok.tt == LUA_TNUMBER)
     {
@@ -593,6 +609,79 @@ static void translateBinaryNumericFallbackIfRequired(IrBuilder& build, IrOp fall
     {
         IrOp next = build.blockAtInst(pcpos + 1);
         FallbackStreamScope scope(build, fallback, next);
+
+        if (tm == TM_ADD || tm == TM_SUB || tm == TM_MUL || tm == TM_DIV || tm == TM_IDIV || tm == TM_MOD)
+        {
+            bool canBeInteger = true;
+            if (opb.kind == IrOpKind::VmConst)
+            {
+                CODEGEN_ASSERT(build.function.proto);
+                TValue protok = build.function.proto->k[vmConstOp(opb)];
+                if (protok.tt != LUA_TINTEGER)
+                    canBeInteger = false;
+            }
+            if (opc.kind == IrOpKind::VmConst)
+            {
+                CODEGEN_ASSERT(build.function.proto);
+                TValue protok = build.function.proto->k[vmConstOp(opc)];
+                if (protok.tt != LUA_TINTEGER)
+                    canBeInteger = false;
+            }
+
+            if (canBeInteger)
+            {
+                IrOp vmFallback = build.fallbackBlock(pcpos);
+                int rb = opb.kind == IrOpKind::VmReg ? vmRegOp(opb) : -1;
+                int rc = opc.kind == IrOpKind::VmReg ? vmRegOp(opc) : -1;
+                
+                if (rb != -1)
+                    build.inst(IrCmd::CHECK_TAG, build.inst(IrCmd::LOAD_TAG, build.vmReg(rb)), build.constTag(LUA_TINTEGER), vmFallback);
+                if (rc != -1)
+                    build.inst(IrCmd::CHECK_TAG, build.inst(IrCmd::LOAD_TAG, build.vmReg(rc)), build.constTag(LUA_TINTEGER), vmFallback);
+                    
+                IrOp extraB = (rb != -1) ? build.inst(IrCmd::LOAD_EXTRA, build.vmReg(rb)) : build.constInt(build.function.proto->k[vmConstOp(opb)].extra[0]);
+                IrOp extraC = (rc != -1) ? build.inst(IrCmd::LOAD_EXTRA, build.vmReg(rc)) : build.constInt(build.function.proto->k[vmConstOp(opc)].extra[0]);
+                build.inst(IrCmd::CHECK_CMP_INT, extraB, extraC, build.cond(IrCondition::Equal), vmFallback);
+                    
+                IrOp vb = (rb != -1) ? build.inst(IrCmd::LOAD_INT64, opb) : loadInt64OrConstant(build, opb);
+                IrOp vc = (rc != -1) ? build.inst(IrCmd::LOAD_INT64, opc) : loadInt64OrConstant(build, opc);
+                IrOp binOp;
+                
+                switch (tm)
+                {
+                case TM_ADD:
+                    binOp = build.inst(IrCmd::ADD_INT64, vb, vc);
+                    break;
+                case TM_SUB:
+                    binOp = build.inst(IrCmd::SUB_INT64, vb, vc);
+                    break;
+                case TM_MUL:
+                    binOp = build.inst(IrCmd::MUL_INT64, vb, vc);
+                    break;
+                case TM_DIV:
+                    build.inst(IrCmd::CHECK_DIV_INT64, vb, vc, vmFallback);
+                    binOp = build.inst(IrCmd::DIV_INT64, vb, vc);
+                    break;
+                case TM_IDIV:
+                    build.inst(IrCmd::CHECK_DIV_INT64, vb, vc, vmFallback);
+                    binOp = build.inst(IrCmd::IDIV_INT64, vb, vc);
+                    break;
+                case TM_MOD:
+                    build.inst(IrCmd::CHECK_CMP_INT64, vc, build.constInt64(0), build.cond(IrCondition::NotEqual), vmFallback);
+                    binOp = build.inst(IrCmd::MOD_INT64, vb, vc);
+                    break;
+                default:
+                    CODEGEN_ASSERT(!"Unknown TM op");
+                }
+                
+                build.inst(IrCmd::STORE_INT64, build.vmReg(ra), binOp);
+                build.inst(IrCmd::STORE_TAG, build.vmReg(ra), build.constTag(LUA_TINTEGER));
+                build.inst(IrCmd::STORE_EXTRA, build.vmReg(ra), extraB);
+                build.inst(IrCmd::JUMP, next);
+                
+                build.beginBlock(vmFallback);
+            }
+        }
 
         build.inst(IrCmd::SET_SAVEDPC, build.constUint(pcpos + 1));
         build.inst(IrCmd::DO_ARITH, build.vmReg(ra), opb, opc, build.constInt(tm));

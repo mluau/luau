@@ -28,6 +28,7 @@ static bool isUnsafeToSink(IrCmd cmd)
     {
     // VM register reads: STORE_TAG/STORE_DOUBLE/STORE_TVALUE/etc. to the same VM register
     case IrCmd::LOAD_TAG:
+        case IrCmd::LOAD_EXTRA:
     case IrCmd::LOAD_POINTER:
     case IrCmd::LOAD_DOUBLE:
     case IrCmd::LOAD_INT:
