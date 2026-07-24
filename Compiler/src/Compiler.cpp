@@ -35,6 +35,7 @@ LUAU_FASTFLAGVARIABLE(LuauCompileStringInterpTargetTop)
 LUAU_FASTFLAG(DebugLuauNoInline)
 LUAU_FASTFLAGVARIABLE(LuauEmitCallFeedback)
 LUAU_FASTFLAG(LuauDefaultArguments)
+LUAU_FASTFLAGVARIABLE(LuauExportedClassIsNilWorkaround)
 
 namespace Luau
 {
@@ -1620,6 +1621,22 @@ struct Compiler
         int32_t classConst = bytecode.addClassShape(std::move(shape));
         checkConstant(classConst, decl->location);
         bytecode.patchAux(auxOffset, classConst);
+
+        if (FFlag::LuauExportedClassIsNilWorkaround && decl->exported)
+        {
+            // ERIN: Temporary workaround for bug where exported class is `nil` within the class scope (methods etc)
+            // We assign it to the export table immediately after the declaration, whereas normally that would only
+            // happen at the end of the module before the implicit `return` statement.
+            LUAU_ASSERT(currentFunction);
+
+            LUAU_ASSERT(locals.contains(&exportTableLocal));
+            int8_t tableReg = getLocalReg(&exportTableLocal);
+            LUAU_ASSERT(tableReg >= 0);
+
+            bytecode.emitAD(LOP_LOADK, dest, classConst);
+            bytecode.emitABC(LOP_SETTABLEKS, dest, tableReg, uint8_t(BytecodeBuilder::getStringHash(sref(decl->name->name))));
+            bytecode.emitAux(shape.className);
+        }
     }
 
     LuauOpcode getUnaryOp(AstExprUnary::Op op)

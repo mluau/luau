@@ -66,6 +66,8 @@ LUAU_FASTFLAG(LuauCodegenFixBufferLenCheck)
 LUAU_FASTFLAG(LuauYieldIter2)
 LUAU_FASTFLAG(LuauCustomYieldablePcalls)
 LUAU_FASTFLAG(DebugLuauUserDefinedClassesRuntime)
+LUAU_FASTFLAG(LuauExportValueSyntax)
+LUAU_FASTFLAG(LuauExportedClassIsNilWorkaround)
 LUAU_FASTFLAG(LuauAutoStack)
 LUAU_FASTFLAG(LuauUdataMetatablePinned)
 LUAU_DYNAMIC_FASTFLAG(LuauGcTableStepFix)
@@ -4234,6 +4236,18 @@ TEST_CASE("Classes")
     };
 
     runConformance("classes.luau");
+}
+
+TEST_CASE("ExportedClasses")
+{
+    ScopedFastFlag sffs[] = {
+        {FFlag::DebugLuauUserDefinedClasses, true},
+        {FFlag::DebugLuauUserDefinedClassesRuntime, true},
+        {FFlag::LuauExportValueSyntax, true},
+        {FFlag::LuauExportedClassIsNilWorkaround, true},
+    };
+
+    runConformance("exportclasses.luau");
 }
 
 [[nodiscard]] static std::string makeHugeFunctionSource()
