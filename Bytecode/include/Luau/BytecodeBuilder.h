@@ -66,7 +66,8 @@ public:
     int32_t addConstantNil();
     int32_t addConstantBoolean(bool value);
     int32_t addConstantNumber(double value);
-    int32_t addConstantInteger(int64_t value);
+    int32_t addConstantInteger(int64_t value, uint8_t mode = 0);
+    int32_t addConstantIntegerHeap(StringRef value, uint8_t mode = 0);
     int32_t addConstantVector(float x, float y, float z, float w);
     int32_t addConstantString(StringRef value);
     int32_t addImport(uint32_t iid);
@@ -193,9 +194,11 @@ protected:
             Type_Table,
             Type_Closure,
             Type_ClassShape,
+            Type_IntegerHeap,
         };
 
         Type type;
+        uint8_t mode = 0;
         union
         {
             bool valueBoolean;

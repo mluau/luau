@@ -333,6 +333,13 @@ void IrLoweringA64::lowerInst(IrInst& inst, uint32_t index, const IrBlock& next)
         build.ldr(inst.regA64, addr);
         break;
     }
+    case IrCmd::LOAD_EXTRA:
+    {
+        inst.regA64 = regs.allocReg(KindA64::w, index);
+        AddressA64 addr = tempAddr(OP_A(inst), offsetof(TValue, extra));
+        build.ldr(inst.regA64, addr);
+        break;
+    }
     case IrCmd::LOAD_POINTER:
     {
         inst.regA64 = regs.allocReg(KindA64::x, index);
@@ -498,15 +505,19 @@ void IrLoweringA64::lowerInst(IrInst& inst, uint32_t index, const IrBlock& next)
     case IrCmd::STORE_EXTRA:
     {
         AddressA64 addr = tempAddr(OP_A(inst), offsetof(TValue, extra));
-        if (intOp(OP_B(inst)) == 0)
+        if (OP_B(inst).kind == IrOpKind::Constant && intOp(OP_B(inst)) == 0)
         {
             build.str(wzr, addr);
         }
-        else
+        else if (OP_B(inst).kind == IrOpKind::Constant)
         {
             RegisterA64 temp = regs.allocTemp(KindA64::w);
             build.mov(temp, intOp(OP_B(inst)));
             build.str(temp, addr);
+        }
+        else if (OP_B(inst).kind == IrOpKind::Inst)
+        {
+            build.str(regOp(OP_B(inst)), addr);
         }
         break;
     }
@@ -2664,11 +2675,11 @@ void IrLoweringA64::lowerInst(IrInst& inst, uint32_t index, const IrBlock& next)
         Label fresh; // used when guard aborts execution or jumps to a VM exit
         Label& fail = getTargetLabel(OP_D(inst), index, fresh);
 
-        if (cond == IrCondition::Equal && intOp(OP_B(inst)) == 0)
+        if (cond == IrCondition::Equal && OP_B(inst).kind == IrOpKind::Constant && intOp(OP_B(inst)) == 0)
         {
             build.cbnz(regOp(OP_A(inst)), fail);
         }
-        else if (cond == IrCondition::NotEqual && intOp(OP_B(inst)) == 0)
+        else if (cond == IrCondition::NotEqual && OP_B(inst).kind == IrOpKind::Constant && intOp(OP_B(inst)) == 0)
         {
             build.cbz(regOp(OP_A(inst)), fail);
         }

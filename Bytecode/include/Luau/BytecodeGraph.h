@@ -148,6 +148,7 @@ enum class BcVmConstKind : uint8_t
 struct BcVmConst
 {
     BcVmConstKind kind;
+    uint8_t mode = 0;
 
     union
     {
@@ -200,7 +201,7 @@ struct BcVmConst
             return valueClosure == rhs.valueClosure;
 
         case BcVmConstKind::Integer:
-            return valueInteger == rhs.valueInteger;
+            return valueInteger == rhs.valueInteger && mode == rhs.mode;
 
         default:
             LUAU_ASSERT(!"Unhandled BcVmConstKind");

@@ -352,14 +352,29 @@ int32_t BytecodeBuilder::addConstantNumber(double value)
     return addConstant(k, c);
 }
 
-int32_t BytecodeBuilder::addConstantInteger(int64_t value)
+int32_t BytecodeBuilder::addConstantInteger(int64_t value, uint8_t mode)
 {
-    Constant c = {Constant::Type_Integer};
+    Constant c = {Constant::Type_Integer, mode};
     c.valueInteger64 = value;
 
     ConstantKey k = {Constant::Type_Integer};
+    k.extra = mode;
     static_assert(sizeof(k.value) == sizeof(value), "Expecting integer to be 64-bit");
     memcpy(&k.value, &value, sizeof(value));
+
+    return addConstant(k, c);
+}
+
+int32_t BytecodeBuilder::addConstantIntegerHeap(StringRef value, uint8_t mode)
+{
+    unsigned int index = addStringTableEntry(value);
+
+    Constant c = {Constant::Type_IntegerHeap, mode};
+    c.valueString = index;
+
+    ConstantKey k = {Constant::Type_IntegerHeap};
+    k.extra = mode;
+    k.value = index;
 
     return addConstant(k, c);
 }
@@ -831,14 +846,20 @@ void BytecodeBuilder::writeFunction(std::string& ss, uint32_t id, uint8_t flags,
             writeByte(ss, LBC_CONSTANT_INTEGER);
             if (c.valueInteger64 < 0)
             {
-                writeByte(ss, 1);
+                writeByte(ss, (c.mode << 1) | 1);
                 writeVarInt(ss, ~(uint64_t)c.valueInteger64 + 1);
             }
             else
             {
-                writeByte(ss, 0);
+                writeByte(ss, (c.mode << 1) | 0);
                 writeVarInt(ss, c.valueInteger64);
             }
+            break;
+
+        case Constant::Type_IntegerHeap:
+            writeByte(ss, LBC_CONSTANT_INTEGER_HEAP);
+            writeByte(ss, c.mode);
+            writeVarInt(ss, c.valueString);
             break;
 
         case Constant::Type_Vector:
@@ -2074,6 +2095,12 @@ void BytecodeBuilder::dumpConstant(std::string& result, int k, bool detailed) co
     case Constant::Type_Integer:
         formatAppend(result, "%lld", (long long)(int64_t)data.valueInteger64);
         break;
+    case Constant::Type_IntegerHeap:
+    {
+        const StringRef& str = debugStrings[data.valueString - 1];
+        formatAppend(result, "%.*si", int(str.length), str.data);
+        break;
+    }
     case Constant::Type_Vector:
         // 3-vectors is the most common configuration, so truncate to three components if possible
         if (data.valueVector[3] == 0.0)

@@ -10,6 +10,7 @@ local ignore =
 
 	-- what follows is a set of mismatches that hopefully eventually will go down to 0
 	"_G.require", -- need to move to Roblox type defs
+	"_G.integer",
 }
 
 function verify(real, rtti, path)

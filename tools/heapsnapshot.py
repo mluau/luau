@@ -15,7 +15,7 @@ import sys
 snapshotMeta = {
     "node_fields": ["type", "name", "id", "self_size", "edge_count", "trace_node_id", "detachedness"],
     "node_types": [
-        ["hidden", "array", "string", "object", "code", "closure", "regexp", "number", "native", "synthetic", "concatenated string", "sliced string", "symbol", "bigint", "object shape"],
+        ["hidden", "array", "string", "object", "code", "closure", "regexp", "number", "native", "synthetic", "concatenated string", "sliced string", "symbol", "integer", "object shape"],
         "string", "number", "number", "number", "number", "number"
     ],
     "edge_fields": ["type", "name_or_index", "to_node"],

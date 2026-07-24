@@ -175,6 +175,15 @@ void AstExprConstantNumber::visit(AstVisitor* visitor)
 AstExprConstantInteger::AstExprConstantInteger(const Location& location, int64_t value, ConstantNumberParseResult parseResult)
     : AstExpr(ClassIndex(), location)
     , value(value)
+    , stringValue(nullptr)
+    , parseResult(parseResult)
+{
+}
+
+AstExprConstantInteger::AstExprConstantInteger(const Location& location, const char* stringValue, ConstantNumberParseResult parseResult)
+    : AstExpr(ClassIndex(), location)
+    , value(0)
+    , stringValue(stringValue)
     , parseResult(parseResult)
 {
 }

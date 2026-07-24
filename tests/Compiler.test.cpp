@@ -24,7 +24,6 @@ LUAU_FASTINT(LuauCompileLoopUnrollThreshold)
 LUAU_FASTINT(LuauCompileLoopUnrollThresholdMaxBoost)
 LUAU_FASTINT(LuauRecursionLimit)
 LUAU_FASTFLAG(LuauIntegerType2)
-LUAU_FASTFLAG(LuauIntegerFastcalls)
 LUAU_FASTFLAG(LuauIntegerBufferFastcalls)
 LUAU_FASTFLAG(LuauCompileStringInterpTargetTop)
 LUAU_FASTFLAG(LuauExportValueSyntax)
@@ -11817,46 +11816,7 @@ RETURN R0 1
     );
 }
 
-TEST_CASE("BufferIntegerFastcall")
-{
-    ScopedFastFlag luauIntegerFastcalls{FFlag::LuauIntegerFastcalls, true};
-    ScopedFastFlag luauIntegerBufferFastcalls{FFlag::LuauIntegerBufferFastcalls, true};
 
-    CHECK_EQ(
-        "\n" + compileFunction0(R"(
-local b = buffer.create(16)
-return buffer.readinteger(b, 0)
-)"),
-        R"(
-GETIMPORT R0 2 [buffer.create]
-LOADN R1 16
-CALL R0 1 1
-FASTCALL2K 131 R0 K3 L0 [0]
-MOVE R2 R0
-LOADK R3 K3 [0]
-GETIMPORT R1 5 [buffer.readinteger]
-CALL R1 2 -1
-L0: RETURN R1 -1
-)"
-    );
-
-    CHECK_EQ(
-        "\n" + compileFunction0(R"(
-local b, v = ...
-buffer.writeinteger(b, 0, v)
-)"),
-        R"(
-GETVARARGS R0 2
-LOADN R4 0
-FASTCALL3 132 R0 R4 R1 L0
-MOVE R3 R0
-MOVE R5 R1
-GETIMPORT R2 2 [buffer.writeinteger]
-CALL R2 3 0
-L0: RETURN R0 0
-)"
-    );
-}
 
 TEST_CASE("ExportLocalBytecode")
 {
@@ -11950,7 +11910,7 @@ TEST_CASE("LBCConstantRegressionTest")
     CHECK_EQ(LBC_CONSTANT_INTEGER, 9);
     CHECK_EQ(LBC_CONSTANT_CLASS_SHAPE, 10);
 
-    CHECK_EQ(LBC_CONSTANT__COUNT, 11);
+    CHECK_EQ(LBC_CONSTANT__COUNT, 12);
 }
 
 TEST_CASE("ExportClass")

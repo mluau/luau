@@ -27,6 +27,7 @@ struct Constant
     };
 
     Type type = Type_Unknown;
+    uint8_t mode = 0;
     unsigned int stringLength = 0;
 
     union

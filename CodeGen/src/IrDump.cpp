@@ -89,6 +89,8 @@ static const char* getTagName(uint8_t tag)
         return "tobject";
     case LUA_TINTEGER:
         return "tinteger";
+    case LUA_THEAPINTEGER:
+        return "theapinteger";
     default:
         CODEGEN_ASSERT(!"Unknown type tag");
         LUAU_UNREACHABLE();
@@ -103,6 +105,8 @@ const char* getCmdName(IrCmd cmd)
         return "NOP";
     case IrCmd::LOAD_TAG:
         return "LOAD_TAG";
+    case IrCmd::LOAD_EXTRA:
+        return "LOAD_EXTRA";
     case IrCmd::LOAD_POINTER:
         return "LOAD_POINTER";
     case IrCmd::LOAD_DOUBLE:

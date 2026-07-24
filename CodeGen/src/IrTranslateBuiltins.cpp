@@ -9,7 +9,7 @@
 
 #include <math.h>
 
-LUAU_FASTFLAG(LuauCodegenInteger3)
+LUAU_FASTFLAG(LuauIntegerLibrary)
 LUAU_FASTFLAGVARIABLE(LuauCodegenBufferInteger)
 
 // TODO: when nresults is less than our actual result count, we can skip computing/writing unused results
@@ -1390,6 +1390,7 @@ static BuiltinImplResult translateBuiltinInt64Binary(
 
     build.inst(IrCmd::STORE_INT64, build.vmReg(ra), binOp);
     build.inst(IrCmd::STORE_TAG, build.vmReg(ra), build.constTag(LUA_TINTEGER));
+    build.inst(IrCmd::STORE_EXTRA, build.vmReg(ra), build.constInt(0));
 
     return {BuiltinImplType::Full, 1};
 }
@@ -1734,7 +1735,7 @@ BuiltinImplResult translateBuiltin(
     if (nparams == LUA_MULTRET)
         return {BuiltinImplType::None, -1};
 
-    if (FFlag::LuauCodegenInteger3 && (args.kind == IrOpKind::Constant || arg3.kind == IrOpKind::Constant))
+    if (FFlag::LuauIntegerLibrary && (args.kind == IrOpKind::Constant || arg3.kind == IrOpKind::Constant))
     {
         switch (bfid)
         {
@@ -1773,7 +1774,6 @@ BuiltinImplResult translateBuiltin(
         case LBF_BUFFER_WRITEF32:
         case LBF_BUFFER_READF64:
         case LBF_BUFFER_WRITEF64:
-        case LBF_BUFFER_READINTEGER:
             if (!isCompatibleConstant(build, args, IrConstKind::Double))
                 return {BuiltinImplType::None, -1};
 
@@ -1782,27 +1782,10 @@ BuiltinImplResult translateBuiltin(
 
             break;
 
-        case LBF_BUFFER_WRITEINTEGER:
-            if (!isCompatibleConstant(build, args, IrConstKind::Double))
-                return {BuiltinImplType::None, -1};
-
-            if (!isCompatibleConstant(build, arg3, IrConstKind::Int64))
-                return {BuiltinImplType::None, -1};
-
-            break;
-
         case LBF_INTEGER_ADD:
         case LBF_INTEGER_SUB:
         case LBF_INTEGER_MUL:
         case LBF_INTEGER_DIV:
-        case LBF_INTEGER_IDIV:
-        case LBF_INTEGER_UDIV:
-        case LBF_INTEGER_REM:
-        case LBF_INTEGER_UREM:
-        case LBF_INTEGER_MOD:
-        case LBF_INTEGER_MIN:
-        case LBF_INTEGER_MAX:
-        case LBF_INTEGER_CLAMP:
         case LBF_INTEGER_LT:
         case LBF_INTEGER_LE:
         case LBF_INTEGER_GT:
@@ -1811,24 +1794,15 @@ BuiltinImplResult translateBuiltin(
         case LBF_INTEGER_ULE:
         case LBF_INTEGER_UGT:
         case LBF_INTEGER_UGE:
-        case LBF_INTEGER_BAND:
-        case LBF_INTEGER_BOR:
-        case LBF_INTEGER_BXOR:
-        case LBF_INTEGER_BNOT:
-        case LBF_INTEGER_BTEST:
-        case LBF_INTEGER_LSHIFT:
-        case LBF_INTEGER_RSHIFT:
-        case LBF_INTEGER_ARSHIFT:
-        case LBF_INTEGER_LROTATE:
-        case LBF_INTEGER_RROTATE:
-        case LBF_INTEGER_EXTRACT:
+            if (!isCompatibleConstant(build, build.vmReg(arg), IrConstKind::Int64))
+                return {BuiltinImplType::None, -1};
+
             if (!isCompatibleConstant(build, args, IrConstKind::Int64))
                 return {BuiltinImplType::None, -1};
 
-            if (!isCompatibleConstant(build, arg3, IrConstKind::Int64))
-                return {BuiltinImplType::None, -1};
-
             break;
+
+
         }
     }
 
@@ -1948,18 +1922,8 @@ BuiltinImplResult translateBuiltin(
         return translateBuiltinBufferRead(build, nparams, ra, arg, args, arg3, nresults, pcpos, IrCmd::BUFFER_READF64, 8, IrCmd::NOP);
     case LBF_BUFFER_WRITEF64:
         return translateBuiltinBufferWrite(build, nparams, ra, arg, args, arg3, nresults, pcpos, IrCmd::BUFFER_WRITEF64, 8, IrCmd::NOP);
-    case LBF_BUFFER_READINTEGER:
-        if (FFlag::LuauCodegenBufferInteger)
-            return translateBuiltinBufferRead(
-                build, nparams, ra, arg, args, arg3, nresults, pcpos, IrCmd::BUFFER_READI64, 8, IrCmd::NOP, IrCmd::STORE_INT64, LUA_TINTEGER
-            );
-        return {BuiltinImplType::None, -1};
     case LBF_BUFFER_ISFROZEN:
         return translateBuiltinBufferIsFrozen(build, nparams, ra, arg, args, nresults, pcpos);
-    case LBF_BUFFER_WRITEINTEGER:
-        if (FFlag::LuauCodegenBufferInteger)
-            return translateBuiltinBufferWrite(build, nparams, ra, arg, args, arg3, nresults, pcpos, IrCmd::BUFFER_WRITEI64, 8, IrCmd::NOP, true);
-        return {BuiltinImplType::None, -1};
     case LBF_VECTOR_MAGNITUDE:
         return translateBuiltinVectorMagnitude(build, nparams, ra, arg, args, arg3, nresults, pcpos);
     case LBF_VECTOR_NORMALIZE:
@@ -1988,154 +1952,14 @@ BuiltinImplResult translateBuiltin(
         return translateBuiltinMathLerp(build, nparams, ra, arg, args, arg3, nresults, fallback, pcpos);
     case LBF_MATH_ISNAN:
         return translateBuiltinMathIsNan(build, nparams, ra, arg, args, nresults, pcpos);
-    case LBF_INTEGER_CREATE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Create(build, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_TONUMBER:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64ToNumber(build, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
     case LBF_INTEGER_ADD:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Add);
-        return {BuiltinImplType::None, -1};
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Add);
     case LBF_INTEGER_SUB:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Sub);
-        return {BuiltinImplType::None, -1};
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Sub);
     case LBF_INTEGER_MUL:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Mul);
-        return {BuiltinImplType::None, -1};
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Mul);
     case LBF_INTEGER_DIV:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Div);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_IDIV:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Idiv);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_UDIV:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Udiv);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_REM:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Rem);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_UREM:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Urem);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_MOD:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Mod);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_MIN:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MinMax(build, nparams, ra, arg, args, arg3, nresults, pcpos, true);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_MAX:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MinMax(build, nparams, ra, arg, args, arg3, nresults, pcpos, false);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_NEG:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Neg(build, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_CLAMP:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Clamp(build, nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_LT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::Less);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_LE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::LessEqual);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_GT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::Greater);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_GE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::GreaterEqual);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_ULT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::UnsignedLess);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_ULE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::UnsignedLessEqual);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_UGT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::UnsignedGreater);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_UGE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Compare(build, nparams, ra, arg, args, nresults, pcpos, IrCondition::UnsignedGreaterEqual);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BAND:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MultiargOp(build, IrCmd::BITAND_INT64, false, int64_t(-1), nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BOR:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MultiargOp(build, IrCmd::BITOR_INT64, false, int64_t(0), nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BXOR:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MultiargOp(build, IrCmd::BITXOR_INT64, false, int64_t(0), nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BNOT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Bnot(build, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BTEST:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64MultiargOp(build, IrCmd::BITAND_INT64, true, int64_t(-1), nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_LSHIFT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Shift(build, IrCmd::BITLSHIFT_INT64, nparams, ra, arg, args, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_RSHIFT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Shift(build, IrCmd::BITRSHIFT_INT64, nparams, ra, arg, args, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_ARSHIFT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Shift(build, IrCmd::BITARSHIFT_INT64, nparams, ra, arg, args, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_LROTATE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Rotate(build, IrCmd::BITLROTATE_INT64, nparams, ra, arg, args, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_RROTATE:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Rotate(build, IrCmd::BITRROTATE_INT64, nparams, ra, arg, args, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_COUNTLZ:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Unary(build, IrCmd::BITCOUNTLZ_INT64, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_COUNTRZ:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Unary(build, IrCmd::BITCOUNTRZ_INT64, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_BSWAP:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Unary(build, IrCmd::BYTESWAP_INT64, nparams, ra, arg, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
-    case LBF_INTEGER_EXTRACT:
-        if (FFlag::LuauCodegenInteger3)
-            return translateBuiltinInt64Extract(build, nparams, ra, arg, args, arg3, nresults, pcpos);
-        return {BuiltinImplType::None, -1};
+        return translateBuiltinInt64Binary(build, nparams, ra, arg, args, nresults, pcpos, Int64Binary::Div);
     default:
         return {BuiltinImplType::None, -1};
     }

@@ -33,6 +33,7 @@ const char* const luaT_typenames[] = {
     "buffer",
     "class",
     "object",
+    "integer",
 };
 
 const char* const luaT_eventname[] = {
@@ -154,6 +155,23 @@ const TString* luaT_objtypenamestr(lua_State* L, const TValue* o)
         {
             if (const TString* name = L->global->lightuserdataname[tag])
                 return name;
+        }
+    }
+
+    // Typed integers override their name based on the mode
+    if (ttisinteger(o) && o->extra[0] != 0)
+    {
+        switch (o->extra[0])
+        {
+            case 1: return luaS_new(L, "i8");
+            case 2: return luaS_new(L, "u8");
+            case 3: return luaS_new(L, "i16");
+            case 4: return luaS_new(L, "u16");
+            case 5: return luaS_new(L, "i32");
+            case 6: return luaS_new(L, "u32");
+            case 7: return luaS_new(L, "i64");
+            case 8: return luaS_new(L, "u64");
+            default: break;
         }
     }
 

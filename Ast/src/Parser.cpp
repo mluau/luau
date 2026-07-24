@@ -3978,21 +3978,23 @@ static ConstantNumberParseResult parseInteger64(int64_t& result, const char* dat
 
     if (base == 10)
     {
-        result = strtoll(data, &end, 10);
+        unsigned long long u = strtoull(data, &end, 10);
 
-        if (end == data || *end != 'i' || end[1] != '\0')
+        if (end == data || *end != '\0')
             return ConstantNumberParseResult::Malformed;
 
-        if (((result == LLONG_MIN) || (result == LLONG_MAX)) && (errno == ERANGE))
+        if ((u == ULLONG_MAX) && (errno == ERANGE))
         {
-            // 'errno' might have been set before we called 'strtoll', but we don't want the overhead of resetting a TLS variable on each call
+            // 'errno' might have been set before we called 'strtoull', but we don't want the overhead of resetting a TLS variable on each call
             // so we only reset it when we get a result that might be an out-of-range error and parse again to make sure
             errno = 0;
-            result = strtoll(data, &end, 10);
+            u = strtoull(data, &end, 10);
 
             if (errno == ERANGE)
                 return ConstantNumberParseResult::IntOverflow;
         }
+
+        result = (int64_t)u;
     }
     else
     {
@@ -4005,7 +4007,7 @@ static ConstantNumberParseResult parseInteger64(int64_t& result, const char* dat
         // hex and binary literals represent bit patterns covering the full uint64 range
         unsigned long long u = strtoull(data, &end, base);
 
-        if (end == data || *end != 'i' || end[1] != '\0')
+        if (end == data || *end != '\0')
             return ConstantNumberParseResult::Malformed;
 
         if ((u == ULLONG_MAX) && (errno == ERANGE))
@@ -5032,12 +5034,34 @@ AstExpr* Parser::parseNumber()
         scratchData.erase(std::remove(scratchData.begin(), scratchData.end(), '_'), scratchData.end());
     }
 
-    if (FFlag::LuauIntegerType2 && (scratchData.back() == 'i'))
+    bool isIntegerSuffix = false;
+    uint8_t mode = 0;
+    
+    struct SuffixMap { const char* s; uint8_t m; };
+    const SuffixMap intSuffixes[] = {
+        {"i8", 1}, {"u8", 2}, {"i16", 3}, {"u16", 4}, 
+        {"i32", 5}, {"u32", 6}, {"i64", 7}, {"u64", 8}, 
+        {"i", 7}, {"n", 0}
+    };
+
+    for (const auto& suffix : intSuffixes)
+    {
+        size_t len = strlen(suffix.s);
+        if (scratchData.size() >= len && scratchData.compare(scratchData.size() - len, len, suffix.s) == 0)
+        {
+            isIntegerSuffix = true;
+            mode = suffix.m;
+            scratchData.erase(scratchData.size() - len);
+            break;
+        }
+    }
+
+    if (FFlag::LuauIntegerType2 && isIntegerSuffix)
     {
         int64_t value = 0;
         ConstantNumberParseResult result;
         if ((strncmp(scratchData.c_str(), "0x", 2) == 0) || (strncmp(scratchData.c_str(), "0X", 2) == 0))
-            result = parseInteger64(value, scratchData.c_str(), 16); // pass in '0x' prefix, it's handled by strtoll
+            result = parseInteger64(value, scratchData.c_str(), 16);
         else if ((strncmp(scratchData.c_str(), "0b", 2) == 0) || (strncmp(scratchData.c_str(), "0B", 2) == 0))
             result = parseInteger64(value, scratchData.c_str() + 2, 2);
         else
@@ -5048,10 +5072,33 @@ AstExpr* Parser::parseNumber()
         if (result == ConstantNumberParseResult::Malformed)
             return reportExprError(start, {}, "Malformed integer");
 
-        if (result != ConstantNumberParseResult::Ok)
-            return reportExprError(start, {}, "Integer overflow");
+        AstExprConstantInteger* node;
+        if (result == ConstantNumberParseResult::IntOverflow)
+        {
+            if (mode != 0)
+                return reportExprError(start, {}, "Integer literal is out of bounds");
+            char* stringValue = copy(scratchData).data;
+            node = allocator.alloc<AstExprConstantInteger>(start, stringValue, ConstantNumberParseResult::HeapInteger);
+        }
+        else
+        {
+            uint64_t uval = (uint64_t)value;
+            switch (mode) {
+                case IntegerMode_I8: value = (int64_t)(int8_t)uval; break;
+                case IntegerMode_U8: value = (uint64_t)(uint8_t)uval; break;
+                case IntegerMode_I16: value = (int64_t)(int16_t)uval; break;
+                case IntegerMode_U16: value = (uint64_t)(uint16_t)uval; break;
+                case IntegerMode_I32: value = (int64_t)(int32_t)uval; break;
+                case IntegerMode_U32: value = (uint64_t)(uint32_t)uval; break;
+                case IntegerMode_I64: value = (int64_t)(int64_t)uval; break;
+                case IntegerMode_U64: value = (uint64_t)(uint64_t)uval; break;
+                default: break;
+            }
+            node = allocator.alloc<AstExprConstantInteger>(start, value, result);
+        }
 
-        AstExprConstantInteger* node = allocator.alloc<AstExprConstantInteger>(start, value, result);
+        node->mode = mode;
+
         if (options.storeCstData)
             cstNodeMap[node] = allocator.alloc<CstExprConstantInteger>(sourceData);
         return node;

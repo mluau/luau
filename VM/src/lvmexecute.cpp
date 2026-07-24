@@ -16,6 +16,7 @@
 #include "lbytecode.h"
 
 #include <string.h>
+LUAU_FASTFLAG(LuauInteger)
 
 LUAU_FASTFLAGVARIABLE(LuauDirectFieldGet)
 LUAU_FLAGVERSION(LuauDirectFieldGet, 3)
@@ -95,6 +96,34 @@ LUAU_FASTFLAGVARIABLE(LuauPromoteProto)
         } \
     }
 
+
+
+#define LUAU_FAST_TYPED_MATH(OP, BUILTIN_OP, FALLBACK) \
+    do { \
+        uint64_t va = rb->value.l; \
+        uint64_t vb = rc->value.l; \
+        uint64_t res = 0; \
+        if (LUAU_UNLIKELY(rb->extra[0] == IntegerMode_Dynamic)) { \
+            int64_t sres; \
+            if (!BUILTIN_OP((int64_t)va, (int64_t)vb, &sres)) { \
+                setintegersmi(ra, sres, IntegerMode_Dynamic); \
+                VM_NEXT(); \
+            } else { \
+                FALLBACK(L, rb, rc, ra); \
+                VM_NEXT(); \
+            } \
+        } else { \
+            uint64_t raw_res = va OP vb; \
+            uint8_t shift = luau_int_shifts[rb->extra[0]]; \
+            if (luau_int_signed[rb->extra[0]]) \
+                res = (int64_t)(raw_res << shift) >> shift; \
+            else \
+                res = (raw_res << shift) >> shift; \
+            setintegersmi(ra, res, (IntegerMode)rb->extra[0]); \
+            VM_NEXT(); \
+        } \
+    } while (0)
+
 #define VM_DISPATCH_OP(op) &&CASE_##op
 
 #define VM_DISPATCH_TABLE() \
@@ -118,7 +147,7 @@ LUAU_FASTFLAGVARIABLE(LuauPromoteProto)
         VM_DISPATCH_OP(LOP_FASTCALL2), VM_DISPATCH_OP(LOP_FASTCALL2K), VM_DISPATCH_OP(LOP_FORGPREP), VM_DISPATCH_OP(LOP_JUMPXEQKNIL), \
         VM_DISPATCH_OP(LOP_JUMPXEQKB), VM_DISPATCH_OP(LOP_JUMPXEQKN), VM_DISPATCH_OP(LOP_JUMPXEQKS), VM_DISPATCH_OP(LOP_IDIV), \
         VM_DISPATCH_OP(LOP_IDIVK), VM_DISPATCH_OP(LOP_GETUDATAKS), VM_DISPATCH_OP(LOP_SETUDATAKS), VM_DISPATCH_OP(LOP_NAMECALLUDATA), \
-        VM_DISPATCH_OP(LOP_NEWCLASSMEMBER), VM_DISPATCH_OP(LOP_CALLFB), VM_DISPATCH_OP(LOP_CMPPROTO),
+        VM_DISPATCH_OP(LOP_NEWCLASSMEMBER), VM_DISPATCH_OP(LOP_CALLFB), VM_DISPATCH_OP(LOP_CMPPROTO), 
 
 #if defined(__GNUC__) || defined(__clang__)
 #define VM_USE_CGOTO 1
@@ -1450,9 +1479,16 @@ reentry:
                         break;
 
                     case LUA_TINTEGER:
-                        pc += lvalue(ra) == lvalue(rb) ? LUAU_INSN_D(insn) : 1;
-                        VM_ASSERT_PC(pc);
-                        VM_NEXT();
+                        if (FFlag::LuauInteger)
+                        {
+                            pc += (ra->value.l == rb->value.l && ra->extra[0] == rb->extra[0]) ? LUAU_INSN_D(insn) : 1;
+                            VM_ASSERT_PC(pc);
+                            VM_NEXT();
+                        }
+                        break;
+
+                    case LUA_THEAPINTEGER:
+                        break;
 
                     default:
                         LUAU_ASSERT(!"Unknown value type");
@@ -1583,9 +1619,16 @@ reentry:
                         break;
 
                     case LUA_TINTEGER:
-                        pc += lvalue(ra) != lvalue(rb) ? LUAU_INSN_D(insn) : 1;
-                        VM_ASSERT_PC(pc);
-                        VM_NEXT();
+                        if (FFlag::LuauInteger)
+                        {
+                            pc += (ra->value.l != rb->value.l || ra->extra[0] != rb->extra[0]) ? LUAU_INSN_D(insn) : 1;
+                            VM_ASSERT_PC(pc);
+                            VM_NEXT();
+                        }
+                        break;
+
+                    case LUA_THEAPINTEGER:
+                        break;
 
                     default:
                         LUAU_ASSERT(!"Unknown value type");
@@ -1754,6 +1797,15 @@ reentry:
                     setnvalue(ra, nvalue(rb) + nvalue(rc));
                     VM_NEXT();
                 }
+                else if (LUAU_LIKELY(ttype(rb) == LUA_TINTEGER && ttype(rc) == LUA_TINTEGER && rb->extra[0] == rc->extra[0]))
+                {
+                    LUAU_FAST_TYPED_MATH(+, __builtin_add_overflow, luaZ_integer_add);
+                }
+                else if (ttisinteger(rb) && ttisinteger(rc))
+                {
+                    luaZ_integer_add(L, rb, rc, ra);
+                    VM_NEXT();
+                }
                 else if (ttisvector(rb) && ttisvector(rc))
                 {
                     const float* vb = vvalue(rb);
@@ -1800,6 +1852,15 @@ reentry:
                     setnvalue(ra, nvalue(rb) - nvalue(rc));
                     VM_NEXT();
                 }
+                else if (LUAU_LIKELY(ttype(rb) == LUA_TINTEGER && ttype(rc) == LUA_TINTEGER && rb->extra[0] == rc->extra[0]))
+                {
+                    LUAU_FAST_TYPED_MATH(-, __builtin_sub_overflow, luaZ_integer_sub);
+                }
+                else if (ttisinteger(rb) && ttisinteger(rc))
+                {
+                    luaZ_integer_sub(L, rb, rc, ra);
+                    VM_NEXT();
+                }
                 else if (ttisvector(rb) && ttisvector(rc))
                 {
                     const float* vb = vvalue(rb);
@@ -1844,6 +1905,15 @@ reentry:
                 if (LUAU_LIKELY(ttisnumber(rb) && ttisnumber(rc)))
                 {
                     setnvalue(ra, nvalue(rb) * nvalue(rc));
+                    VM_NEXT();
+                }
+                else if (LUAU_LIKELY(ttype(rb) == LUA_TINTEGER && ttype(rc) == LUA_TINTEGER && rb->extra[0] == rc->extra[0]))
+                {
+                    LUAU_FAST_TYPED_MATH(*, __builtin_mul_overflow, luaZ_integer_mul);
+                }
+                else if (ttisinteger(rb) && ttisinteger(rc))
+                {
+                    luaZ_integer_mul(L, rb, rc, ra);
                     VM_NEXT();
                 }
                 else if (ttisvector(rb) && ttisnumber(rc))
@@ -1905,6 +1975,11 @@ reentry:
                 if (LUAU_LIKELY(ttisnumber(rb) && ttisnumber(rc)))
                 {
                     setnvalue(ra, nvalue(rb) / nvalue(rc));
+                    VM_NEXT();
+                }
+                else if (ttisinteger(rb) && ttisinteger(rc))
+                {
+                    luaZ_integer_div(L, rb, rc, ra);
                     VM_NEXT();
                 }
                 else if (ttisvector(rb) && ttisnumber(rc))
@@ -2016,11 +2091,16 @@ reentry:
                 VM_CASE_STKID rc = VM_REG(LUAU_INSN_C(insn));
 
                 // fast-path
-                if (ttisnumber(rb) && ttisnumber(rc))
+                if (LUAU_LIKELY(ttisnumber(rb) && ttisnumber(rc)))
                 {
                     double nb = nvalue(rb);
                     double nc = nvalue(rc);
                     setnvalue(ra, luai_nummod(nb, nc));
+                    VM_NEXT();
+                }
+                else if (ttisinteger(rb) && ttisinteger(rc))
+                {
+                    luaZ_integer_mod(L, rb, rc, ra);
                     VM_NEXT();
                 }
                 else

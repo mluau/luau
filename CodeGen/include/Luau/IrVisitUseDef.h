@@ -16,6 +16,7 @@ static void visitVmRegDefsUses(T& visitor, IrFunction& function, IrInst& inst)
     switch (inst.cmd)
     {
     case IrCmd::LOAD_TAG:
+    case IrCmd::LOAD_EXTRA:
     case IrCmd::LOAD_POINTER:
     case IrCmd::LOAD_DOUBLE:
     case IrCmd::LOAD_INT:

@@ -1881,7 +1881,7 @@ struct Compiler
             break;
 
         case Constant::Type_Integer:
-            cid = bytecode.addConstantInteger(c->valueInteger64);
+            cid = bytecode.addConstantInteger(c->valueInteger64, c->mode);
             break;
 
         case Constant::Type_Vector:
@@ -2124,7 +2124,7 @@ struct Compiler
         AstExprConstantInteger* cint = expr->expr->as<AstExprConstantInteger>();
         if (FFlag::LuauIntegerType2 && (expr->op == AstExprUnary::Op::Minus) && (cint != nullptr))
         {
-            int32_t cid = bytecode.addConstantInteger((int64_t)(~(uint64_t)cint->value + 1));
+            int32_t cid = bytecode.addConstantInteger((int64_t)(~(uint64_t)cint->value + 1), cint->mode);
             if (cid < 0)
                 CompileError::raise(expr->location, "Exceeded constant limit; simplify the code to compile");
 
@@ -2855,7 +2855,7 @@ struct Compiler
         {
             int64_t l = cv->valueInteger64;
 
-            int32_t cid = bytecode.addConstantInteger(l);
+            int32_t cid = bytecode.addConstantInteger(l, cv->mode);
             if (cid < 0)
                 CompileError::raise(node->location, "Exceeded constant limit; simplify the code to compile");
 
@@ -2926,11 +2926,21 @@ struct Compiler
         }
         else if (AstExprConstantInteger* expr = node->as<AstExprConstantInteger>())
         {
-            int32_t cid = bytecode.addConstantInteger(expr->value);
-            if (cid < 0)
-                CompileError::raise(expr->location, "Exceeded constant limit; simplify the code to compile");
+            if (expr->parseResult == ConstantNumberParseResult::HeapInteger)
+            {
+                int32_t cid = bytecode.addConstantIntegerHeap({expr->stringValue, strlen(expr->stringValue)}, expr->mode);
+                if (cid < 0)
+                    CompileError::raise(expr->location, "Exceeded constant limit; simplify the code to compile");
+                emitLoadK(target, cid);
+            }
+            else
+            {
+                int32_t cid = bytecode.addConstantInteger(expr->value, expr->mode);
+                if (cid < 0)
+                    CompileError::raise(expr->location, "Exceeded constant limit; simplify the code to compile");
 
-            emitLoadK(target, cid);
+                emitLoadK(target, cid);
+            }
         }
         else if (AstExprConstantString* expr = node->as<AstExprConstantString>())
         {

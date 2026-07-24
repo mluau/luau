@@ -154,9 +154,12 @@ std::optional<CompTimeBcFunction> fromFunctionBytecode(std::string bytecode, std
         case LBC_CONSTANT_INTEGER:
         {
             fn.constants[i].kind = BcVmConstKind::Integer;
-            bool isNegative = read<uint8_t>(data, offset);
+            uint8_t signAndMode = read<uint8_t>(data, offset);
+            bool isNegative = signAndMode & 1;
+            uint8_t mode = signAndMode >> 1;
             uint64_t magnitude = readVarInt64(data, offset);
             fn.constants[i].valueInteger = isNegative ? (int64_t)(~magnitude + 1) : (int64_t)magnitude;
+            fn.constants[i].mode = mode;
             break;
         }
         default:
@@ -337,7 +340,7 @@ std::string toFunctionBytecode(BytecodeBuilder& bcb, CompTimeBcFunction& fn)
             break;
 
         case BcVmConstKind::Integer:
-            consts.push_back(bcb.addConstantInteger(c.valueInteger));
+            consts.push_back(bcb.addConstantInteger(c.valueInteger, c.mode));
             break;
         }
     }

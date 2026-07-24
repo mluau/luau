@@ -612,9 +612,26 @@ static int loadsafe(
 
             case LBC_CONSTANT_INTEGER:
             {
-                bool isNegative = read<uint8_t>(data, size, offset);
+                uint8_t signAndMode = read<uint8_t>(data, size, offset);
+                bool isNegative = signAndMode & 1;
+                uint8_t mode = signAndMode >> 1;
                 uint64_t magnitude = readVarInt64(data, size, offset);
-                setlvalue(&p->k[j], isNegative ? (int64_t)(~magnitude + 1) : (int64_t)magnitude);
+                int64_t val = isNegative ? (int64_t)(~magnitude + 1) : (int64_t)magnitude;
+                setintegersmi(&p->k[j], val, (IntegerMode)mode);
+                break;
+            }
+
+            case LBC_CONSTANT_INTEGER_HEAP:
+            {
+                uint8_t mode = read<uint8_t>(data, size, offset);
+                uint32_t sid = readVarInt(data, size, offset);
+                if (sid == 0 || sid > strings.count)
+                    LUAU_ASSERT(!"String ID is out of bounds");
+
+                TString* str = strings.data[sid - 1];
+
+                luaZ_integer_fromstring(L, getstr(str), &p->k[j]);
+                p->k[j].extra[0] = mode;
                 break;
             }
 
