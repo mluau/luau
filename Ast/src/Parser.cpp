@@ -5080,20 +5080,18 @@ AstExpr* Parser::parseNumber()
         }
         else
         {
-            bool outOfBounds = false;
             uint64_t uval = (uint64_t)value;
             switch (mode) {
-                case 1: outOfBounds = (uval > 128); break;
-                case 2: outOfBounds = (uval > 255); break;
-                case 3: outOfBounds = (uval > 32768); break;
-                case 4: outOfBounds = (uval > 65535); break;
-                case 5: outOfBounds = (uval > 2147483648ULL); break;
-                case 6: outOfBounds = (uval > 4294967295ULL); break;
-                case 7: outOfBounds = (uval > 9223372036854775808ULL); break;
-                case 8: outOfBounds = false; break; // u64 can fit any uint64_t which parseInteger64 supports
+                case IntegerMode_I8: value = (int64_t)(int8_t)uval; break;
+                case IntegerMode_U8: value = (uint64_t)(uint8_t)uval; break;
+                case IntegerMode_I16: value = (int64_t)(int16_t)uval; break;
+                case IntegerMode_U16: value = (uint64_t)(uint16_t)uval; break;
+                case IntegerMode_I32: value = (int64_t)(int32_t)uval; break;
+                case IntegerMode_U32: value = (uint64_t)(uint32_t)uval; break;
+                case IntegerMode_I64: value = (int64_t)(int64_t)uval; break;
+                case IntegerMode_U64: value = (uint64_t)(uint64_t)uval; break;
+                default: break;
             }
-            if (outOfBounds)
-                return reportExprError(start, {}, "Integer literal is out of bounds");
             node = allocator.alloc<AstExprConstantInteger>(start, value, result);
         }
 

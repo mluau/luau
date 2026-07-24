@@ -329,17 +329,6 @@ typedef struct HeapInteger
     uint32_t* digits;
 } HeapInteger;
 
-enum IntegerMode : uint8_t {
-    IntegerMode_Dynamic = 0,
-    IntegerMode_I8,
-    IntegerMode_U8,
-    IntegerMode_I16,
-    IntegerMode_U16,
-    IntegerMode_I32,
-    IntegerMode_U32,
-    IntegerMode_I64,
-    IntegerMode_U64
-};
 
 void luaZ_integer_add(lua_State* L, const TValue* a, const TValue* b, TValue* res);
 void luaZ_integer_sub(lua_State* L, const TValue* a, const TValue* b, TValue* res);

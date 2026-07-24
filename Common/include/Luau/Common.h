@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string.h>
+#include <stdint.h>
 
 // Compiler codegen control macros
 #ifdef _MSC_VER
@@ -38,6 +39,19 @@
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
 #define LUAU_BIG_ENDIAN
 #endif
+
+
+enum IntegerMode : unsigned char {
+    IntegerMode_Dynamic = 0,
+    IntegerMode_I8,
+    IntegerMode_U8,
+    IntegerMode_I16,
+    IntegerMode_U16,
+    IntegerMode_I32,
+    IntegerMode_U32,
+    IntegerMode_I64,
+    IntegerMode_U64
+};
 
 namespace Luau
 {
