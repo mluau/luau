@@ -17,20 +17,21 @@ Buffer* luaB_newbuffer(lua_State* L, size_t s)
     luaC_init(L, b, LUA_TBUFFER);
     b->len = unsigned(s);
     b->mode = 0;
-    b->free_cb = NULL;
+    b->tag = 0;
     b->data = b->inline_data;
     b->userdata = NULL;
     memset(b->data, 0, b->len);
     return b;
 }
 
-Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdata, lua_BufferFree free_cb, int mode)
+Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdata, int tag, int mode)
 {
     LUAU_ASSERT(mode == 1 || mode == 2);
+    lua_BufferFree dtor = L->global->buffergc[tag];
     if (s > MAX_BUFFER_SIZE)
     {
-        if (free_cb)
-            free_cb(L, data, s, userdata);
+        if (dtor)
+            dtor(L, data, s, userdata);
         luaM_toobig(L, "ext. buffer too big", MAX_BUFFER_SIZE);
     }
 
@@ -48,8 +49,8 @@ Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdat
     int status = luaD_rawrunprotected(L, &AllocContext::run, &ctx);
     if (status != 0)
     {
-        if (free_cb)
-            free_cb(L, data, s, userdata);
+        if (dtor)
+            dtor(L, data, s, userdata);
         luaD_throw(L, status);
     }
 
@@ -59,7 +60,7 @@ Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdat
     b->mode = mode;
     b->data = (char*)data;
     b->userdata = userdata;
-    b->free_cb = free_cb;
+    b->tag = tag;
     
     L->global->totalbytes += s;
     L->global->memcatbytes[L->activememcat] += s;
@@ -69,8 +70,9 @@ Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdat
 void luaB_freebuffer(lua_State* L, Buffer* b, lua_Page* page)
 {
     if (b->mode != 0) {
-        if (b->free_cb) {
-            b->free_cb(L, b->data, b->len, b->userdata);
+        lua_BufferFree dtor = L->global->buffergc[b->tag];
+        if (dtor) {
+            dtor(L, b->data, b->len, b->userdata);
         }
         L->global->totalbytes -= b->len;
         L->global->memcatbytes[b->memcat] -= b->len;

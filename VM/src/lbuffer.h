@@ -10,5 +10,5 @@
 #define sizebuffer(len) (offsetof(Buffer, inline_data) + ((len) < 8 ? 8 : (len)))
 
 LUAI_FUNC Buffer* luaB_newbuffer(lua_State* L, size_t s);
-LUAI_FUNC Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdata, lua_BufferFree free_cb, int mode);
+LUAI_FUNC Buffer* luaB_newexternalbuffer(lua_State* L, size_t s, void* data, void* userdata, int tag, int mode);
 LUAI_FUNC void luaB_freebuffer(lua_State* L, Buffer* u, struct lua_Page* page);

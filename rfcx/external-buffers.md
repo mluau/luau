@@ -47,6 +47,19 @@ The Luau C API is expanded with the following functions and types:
 * `lua_getbuffermode` returns the mode of the buffer at the given index.
 * `lua_getbufferuserdata` returns the opaque `userdata` pointer associated with the buffer, or `NULL` if the buffer is a standard Luau buffer. This allows host applications to retrieve their underlying resource structures from buffer objects passed back into C/C++ from Lua, enabling operations like downcasting a buffer back to the original host resource for native manipulation.
 
+**C API Amendment on Aug 14**
+
+Ext buffers are now tagged for safety purposes so:
+
+```
+void* lua_newexternalbuffer(lua_State* L, size_t sz, void* data, void* userdata, int tag, int mode)
+```
+
+- `lua_newexternalbuffer` now takes `int tag` instead of `lua_BufferFree free_cb`
+- `lua_BufferFree lua_getbufferdtor(lua_State* L, int tag)` and `void lua_setbufferdtor(lua_State* L, int tag, lua_BufferFree dtor)` can be used to set buffer dtor
+- `int lua_buffertag(lua_State* L, int idx)` can be used to get the tag of buffer at `idx` or `-1` if untagged.
+
+
 ### Lua Standard Library Additions
 
 A new function `buffer.isfrozen(b)` is added to the `buffer` standard library.

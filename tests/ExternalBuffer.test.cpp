@@ -53,7 +53,8 @@ static int too_big_external_buffer_cb(lua_State* L)
 {
     size_t len = (1 << 30) + 1; // MAX_BUFFER_SIZE + 1
     int test_userdata = 42;
-    lua_newexternalbuffer(L, len, nullptr, &test_userdata, test_buffer_free_cb, LUA_BHOST_MUTABLE);
+    lua_setbufferdtor(L, 2, test_buffer_free_cb);
+    lua_newexternalbuffer(L, len, nullptr, &test_userdata, 2, LUA_BHOST_MUTABLE);
     return 0;
 }
 
@@ -83,8 +84,9 @@ TEST_CASE("ExternalBufferMutable")
     char my_memory[32];
     memset(my_memory, 0, sizeof(my_memory));
 
-    lua_newexternalbuffer(L, sizeof(my_memory), my_memory, nullptr, test_buffer_free_cb, LUA_BHOST_MUTABLE);
-    
+    lua_setbufferdtor(L, 3, test_buffer_free_cb);
+    lua_newexternalbuffer(L, sizeof(my_memory), my_memory, nullptr, 3, LUA_BHOST_MUTABLE);
+    CHECK(lua_buffertag(L, -1) == 3);
     CHECK(lua_getbuffermode(L, -1) == LUA_BHOST_MUTABLE);
     CHECK(lua_getbufferuserdata(L, -1) == nullptr);
     
@@ -121,8 +123,9 @@ TEST_CASE("ExternalBufferImmutable")
 
     int test_userdata = 42;
 
-    lua_newexternalbuffer(L, sizeof(my_memory), my_memory, &test_userdata, test_buffer_free_cb, LUA_BHOST_IMMUTABLE);
-    
+    lua_setbufferdtor(L, 2, test_buffer_free_cb);
+    lua_newexternalbuffer(L, sizeof(my_memory), my_memory, &test_userdata, 2, LUA_BHOST_IMMUTABLE);
+    CHECK(lua_buffertag(L, -1) == 2);
     CHECK(lua_getbuffermode(L, -1) == LUA_BHOST_IMMUTABLE);
     CHECK(lua_getbufferuserdata(L, -1) == &test_userdata);
     
@@ -171,7 +174,9 @@ TEST_CASE("ExternalBufferImmutable_NCG")
         memset(my_memory, 0, sizeof(my_memory));
         my_memory[0] = 55;
 
-        lua_newexternalbuffer(L, sizeof(my_memory), my_memory, nullptr, test_buffer_free_cb, LUA_BHOST_IMMUTABLE);
+        lua_setbufferdtor(L, 2, test_buffer_free_cb);
+        lua_newexternalbuffer(L, sizeof(my_memory), my_memory, nullptr, 2, LUA_BHOST_IMMUTABLE);
+        CHECK(lua_buffertag(L, -1) == 2);
         lua_setglobal(L, "ext_buf");
 
         // Read from buffer via Lua should succeed

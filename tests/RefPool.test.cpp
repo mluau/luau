@@ -216,4 +216,54 @@ TEST_CASE("RefPoolTableRefGC")
     lua_close(L);
 }
 
+TEST_CASE("RefPoolPrimitiveAPIs")
+{
+    ScopedFastFlag sff{FFlag::LuauManagedReferences2, true};
+    lua_State* L = luaL_newstate();
+    
+    // Create a string
+    lua_pushstring(L, "hello");
+    int str_ref = lua_refpool(L, -1);
+    lua_pop(L, 1);
+    
+    // Create a table
+    lua_newtable(L);
+    int table_ref1 = lua_refpool(L, -1);
+    lua_pushvalue(L, -1);
+    int table_ref2 = lua_refpool(L, -1);
+    lua_pop(L, 2);
+    
+    // Create userdata
+    void* ud = lua_newuserdata(L, 16);
+    int ud_ref = lua_refpool(L, -1);
+    lua_pop(L, 1);
+    
+    // Create nil
+    lua_pushnil(L);
+    int nil_ref = lua_refpool(L, -1);
+    lua_pop(L, 1);
+    
+    // Test objlen
+    CHECK_EQ(lua_refpool_objlen(L, str_ref), 5);
+    CHECK_EQ(lua_refpool_objlen(L, table_ref1), 0);
+    CHECK_EQ(lua_refpool_objlen(L, ud_ref), 16);
+    CHECK_EQ(lua_refpool_objlen(L, nil_ref), 0);
+    
+    // Test topointer
+    CHECK_NE(lua_refpool_topointer(L, table_ref1), nullptr);
+    CHECK_EQ(lua_refpool_topointer(L, table_ref1), lua_refpool_topointer(L, table_ref2));
+    CHECK_EQ(lua_refpool_topointer(L, ud_ref), ud);
+    CHECK_EQ(lua_refpool_topointer(L, nil_ref), nullptr);
+    CHECK_EQ(lua_refpool_topointer(L, LUA_REFNIL), nullptr);
+    
+    // Test rawequal
+    CHECK_EQ(lua_refpool_rawequal(L, table_ref1, table_ref2), 1);
+    CHECK_EQ(lua_refpool_rawequal(L, str_ref, table_ref1), 0);
+    CHECK_EQ(lua_refpool_rawequal(L, nil_ref, nil_ref), 1);
+    CHECK_EQ(lua_refpool_rawequal(L, LUA_REFNIL, LUA_REFNIL), 1);
+    CHECK_EQ(lua_refpool_rawequal(L, table_ref1, LUA_REFNIL), 0);
+    
+    lua_close(L);
+}
+
 TEST_SUITE_END();

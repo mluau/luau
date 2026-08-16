@@ -255,6 +255,8 @@ typedef struct global_State
     // per-tag direct field dispatch tables; NULL until first field is registered for that tag
     struct LuaTable* udatadirectfields[UTAG_INTERNAL_LIMIT];
 
+    lua_BufferFree buffergc[LUA_BUFFER_LIMIT]; // for each buffer tag, a gc callback to be called immediately before freeing memory
+
     GCStats gcstats;
     uint32_t lastprotoid;
 

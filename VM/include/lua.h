@@ -224,7 +224,10 @@ LUA_API void* lua_newbuffer(lua_State* L, size_t sz);
 #define LUA_BHOST_MUTABLE 2
 
 typedef void (*lua_BufferFree)(lua_State* L, void* data, size_t sz, void* userdata);
-LUA_API void* lua_newexternalbuffer(lua_State* L, size_t sz, void* data, void* userdata, lua_BufferFree free_cb, int mode);
+LUA_API void* lua_newexternalbuffer(lua_State* L, size_t sz, void* data, void* userdata, int tag, int mode);
+LUA_API void lua_setbufferdtor(lua_State* L, int tag, lua_BufferFree dtor);
+LUA_API lua_BufferFree lua_getbufferdtor(lua_State* L, int tag);
+LUA_API int lua_buffertag(lua_State* L, int idx);
 
 /*
 ** get functions (Lua -> stack)
@@ -432,6 +435,11 @@ LUA_API void lua_unref(lua_State* L, int ref);
 LUA_API int lua_refpool(lua_State* L, int idx);
 LUA_API void lua_unrefpool(lua_State* L, int ref);
 LUA_API int lua_getrefpool(lua_State* L, int ref);
+LUA_API const void* lua_refpool_topointer(lua_State* L, int ref);
+LUA_API void* lua_refpool_touserdatatagged(lua_State* L, int ref, int tag);
+LUA_API int lua_refpool_objlen(lua_State* L, int ref);
+LUA_API int lua_refpool_rawequal(lua_State* L, int ref1, int ref2);
+LUA_API int lua_refpool_pcall(lua_State* L, int func_ref, int err_ref, int nargs, int nresults);
 
 /*
 ** ===============================================================

@@ -113,6 +113,11 @@
 #define LUA_LUTAG_LIMIT 128
 #endif
 
+// number of valid Lua buffer tags
+#ifndef LUA_BUFFER_LIMIT
+#define LUA_BUFFER_LIMIT 128
+#endif
+
 // upper bound for number of size classes used by page allocator
 #ifndef LUA_SIZECLASSES
 #define LUA_SIZECLASSES 40
