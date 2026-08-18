@@ -15,6 +15,10 @@
 /luau-analyze
 /luau-bytecode
 /luau-compile
+/luau.exe
+/luau-analyze.exe
+/target/
 __pycache__
 .cache
 .clangd
+/copytoluwu.luau

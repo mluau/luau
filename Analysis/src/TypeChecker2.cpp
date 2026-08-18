@@ -44,6 +44,7 @@ LUAU_FASTFLAG(LuauBidirectionalInferenceSimplifyTables)
 LUAU_FASTFLAGVARIABLE(LuauBetterPackAndVariadicMismatchErrors)
 
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
+LUAU_FASTFLAG(LuauBetterUserDefinedClasses)
 LUAU_FASTFLAG(LuauDefaultArguments)
 
 namespace Luau
@@ -1367,6 +1368,28 @@ void TypeChecker2::visit(AstStatClass* stat)
         else if (const auto* method = member.get_if<AstClassMethod>())
         {
             visit(method->function);
+
+            if (method->functionName == "__tostring")
+            {
+                if (const FunctionType* ftv = get<FunctionType>(lookupType(method->function)))
+                {
+                    NotNull<Scope> scope{findInnermostScope(method->function->location)};
+                    std::optional<TypeId> ret = first(ftv->retTypes);
+                    if (!ret || !subtyping->isSubtype(follow(*ret), builtinTypes->stringType, scope).isSubtype)
+                        reportError(GenericError{"Metamethod '__tostring' must return a string"}, method->function->location);
+                }
+            }
+            else if (method->functionName == "__init")
+            {
+                if (const FunctionType* ftv = get<FunctionType>(lookupType(method->function)))
+                {
+                    if (first(ftv->retTypes))
+                        reportError(
+                            GenericError{"__init constructor should assign fields to self and should not return a value"},
+                            method->function->location
+                        );
+                }
+            }
         }
         else
             LUAU_ASSERT(!"Unknown class member!");
@@ -1633,12 +1656,30 @@ void TypeChecker2::visitCall(AstExprCall* call)
         argExprs.push_back(indexExpr->expr);
     }
 
+    const FunctionType* fty = get<FunctionType>(fnTy);
+    size_t selfOffset = call->self ? 1 : 0;
+
+    if (!fty && !call->self)
+    {
+        // `fnTy` isn't itself callable, so this call is dispatched through a
+        // `__call` metamethod, which forwards `call->func` as its first
+        // argument -- same as `self` above -- so param types need to be read
+        // starting from its second parameter.
+        if (auto callMm = findMetatableEntry(builtinTypes, module->errors, fnTy, "__call", call->func->location))
+        {
+            fty = get<FunctionType>(follow(*callMm));
+            if (fty)
+            {
+                selfOffset = 1;
+                checkPrivateConstructorAccess(fnTy, call->func->location);
+            }
+        }
+    }
+
     // FIXME: Similar to bidirectional inference prior, this does not support
     // overloaded functions nor generic typeArguments (yet).
-    if (auto fty = get<FunctionType>(fnTy); fty && fty->generics.empty() && fty->genericPacks.empty() && call->args.size > 0)
+    if (fty && fty->generics.empty() && fty->genericPacks.empty() && call->args.size > 0)
     {
-        size_t selfOffset = call->self ? 1 : 0;
-
         std::vector<TypeId> paramsHead = extendTypePack(*module->internalTypes, builtinTypes, fty->argTypes, call->args.size + selfOffset).head;
 
         for (size_t idx = 0; idx < call->args.size; ++idx)
@@ -1798,8 +1839,15 @@ void TypeChecker2::visitCall(AstExprCall* call)
         {
             const bool isVariadic = Luau::isVariadic(fn->argTypes);
 
+            // A `__call` metamethod is invoked with `call->func` forwarded as its
+            // first argument, but `argHead` (built from `call->args`) doesn't
+            // include it -- account for it here or the reported count is off by one.
+            size_t specifiedCount = argHead.size();
+            if (result2.metamethods.contains(fnTy))
+                specifiedCount += 1;
+
             auto [minParams, optMaxParams] = getParameterExtents(TxnLog::empty(), fn->argTypes);
-            reportError(CountMismatch{minParams, optMaxParams, argHead.size(), CountMismatch::Arg, isVariadic}, call->func->location);
+            reportError(CountMismatch{minParams, optMaxParams, specifiedCount, CountMismatch::Arg, isVariadic}, call->func->location);
             return;
         }
     }
@@ -1907,11 +1955,81 @@ TypeId TypeChecker2::stripFromNilAndReport(TypeId ty, const Location& location)
     return ty;
 }
 
+void TypeChecker2::checkPrivatePropertyAccess(TypeId tableTy, const std::string& prop, const Location& location)
+{
+    if (!FFlag::DebugLuauUserDefinedClasses)
+        return;
+
+    const ExternType* cls = get<ExternType>(follow(tableTy));
+    while (cls)
+    {
+        auto it = cls->props.find(prop);
+        if (it != cls->props.end())
+        {
+            if (it->second.isPrivate && !(cls->definitionLocation && cls->definitionLocation->encloses(location)))
+                reportError(PrivatePropertyAccess{tableTy, prop}, location);
+            return;
+        }
+
+        cls = cls->parent ? get<ExternType>(follow(*cls->parent)) : nullptr;
+    }
+}
+
+void TypeChecker2::checkConstPropertyAssignment(TypeId tableTy, const std::string& prop, ValueContext context, const Location& location)
+{
+    if (!FFlag::DebugLuauUserDefinedClasses || !FFlag::LuauBetterUserDefinedClasses)
+        return;
+
+    if (context != ValueContext::LValue)
+        return;
+
+    const ExternType* cls = get<ExternType>(follow(tableTy));
+    while (cls)
+    {
+        auto it = cls->props.find(prop);
+        if (it != cls->props.end())
+        {
+            if (it->second.isConst && !(cls->initLocation && cls->initLocation->encloses(location)))
+                reportError(ConstPropertyAssignment{tableTy, prop}, location);
+            return;
+        }
+
+        cls = cls->parent ? get<ExternType>(follow(*cls->parent)) : nullptr;
+    }
+}
+
+void TypeChecker2::checkPrivateConstructorAccess(TypeId classTy, const Location& location)
+{
+    if (!FFlag::DebugLuauUserDefinedClasses || !FFlag::LuauBetterUserDefinedClasses)
+        return;
+
+    const ExternType* cls = get<ExternType>(follow(classTy));
+    if (!cls || !cls->relation)
+        return;
+
+    const Obj* obj = get_if<Obj>(&*cls->relation);
+    if (!obj)
+        return;
+
+    const ExternType* instanceCls = get<ExternType>(follow(obj->ty));
+    if (!instanceCls)
+        return;
+
+    auto it = instanceCls->props.find("__init");
+    if (it == instanceCls->props.end())
+        return;
+
+    if (it->second.isPrivate && !(instanceCls->definitionLocation && instanceCls->definitionLocation->encloses(location)))
+        reportError(PrivateConstructorAccess{classTy}, location);
+}
+
 void TypeChecker2::visitExprName(AstExpr* expr, Location location, const std::string& propName, ValueContext context, TypeId astIndexExprTy)
 {
     visit(expr, ValueContext::RValue);
     TypeId leftType = stripFromNilAndReport(lookupType(expr), location);
     checkIndexTypeFromType(leftType, propName, context, location, astIndexExprTy);
+    checkPrivatePropertyAccess(leftType, propName, location);
+    checkConstPropertyAssignment(leftType, propName, context, location);
 }
 
 void TypeChecker2::visit(AstExprIndexName* indexName, ValueContext context)

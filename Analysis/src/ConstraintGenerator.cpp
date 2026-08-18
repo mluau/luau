@@ -44,6 +44,7 @@ LUAU_FASTFLAGVARIABLE(LuauDisallowRedefiningBuiltinTypes)
 LUAU_FASTFLAG(LuauTypeFunctionStructuredErrors)
 LUAU_FASTFLAGVARIABLE(LuauReadOnlyIndexers)
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
+LUAU_FASTFLAG(LuauBetterUserDefinedClasses)
 LUAU_FASTFLAGVARIABLE(LuauTidyTypePrototyping)
 LUAU_FASTFLAGVARIABLE(LuauDoNotEmplaceAnnotatedType)
 LUAU_FASTFLAGVARIABLE(LuauRemovePrimitiveTypeConstraintAndSubtypingUnifier)
@@ -1094,6 +1095,17 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
             scope->bindings[classDecl->name] = Binding{theTy, classDecl->name->location};
             scope->lvalueTypes[theDef] = theTy;
 
+            // Under LuauGenericNominals, property and method type annotations are resolved
+            // against the class's own definition scope, so that references to the class's own
+            // generics (e.g. the `T` in `class Box<T> ... end`) resolve correctly. See the
+            // equivalent handling for `declare extern type` above.
+            ScopePtr defnScope = scope;
+            if (FFlag::LuauBetterUserDefinedClasses && FFlag::LuauGenericNominals)
+            {
+                defnScope = childScope(classDecl, scope);
+                astClassDefiningScopes[classDecl] = defnScope;
+            }
+
             // Objects are ExternTypes, where the metatable field represents the metamethods associated with the instance, ** not ** the class itself.
             // Class: ExternType { props, parent: top class type, metatable: {__call -- this lets it be called as a constructor } }
             // Object: ExternType { props, parent: top object type for now, metatable: instance metamethods }
@@ -1125,6 +1137,11 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
                             // we'll ICE or misbehave.
                             p = Property::rw(propertyType);
                             p.location = classProp.nameLocation;
+                            if (FFlag::DebugLuauUserDefinedClasses && FFlag::LuauBetterUserDefinedClasses)
+                            {
+                                p.isPrivate = classProp.visibility == AstClassMemberVisibility::Private;
+                                p.isConst = classProp.isConst;
+                            }
 
                             // We make the constructor take read-only args.
                             // This is true, in that we do not write to the
@@ -1140,7 +1157,10 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
 
                             auto prop = Property::readonly(propertyType);
                             prop.location = method.nameLocation;
-                            if (method.function->args.size < 1 || method.function->args.data[0]->name != "self")
+                            if (FFlag::DebugLuauUserDefinedClasses && FFlag::LuauBetterUserDefinedClasses)
+                                prop.isPrivate = method.visibility == AstClassMemberVisibility::Private;
+                            if (method.function->args.size < 1 || method.function->args.data[0]->name != "self" ||
+                                method.functionName == "__init")
                                 staticProps[method.functionName.value] = prop;
                             // The parser will report an error for classes that define disallowed metamethods.
                             // The RFC also requires that it is a syntax error for methods to have __ in their name whos name is not in the
@@ -1163,8 +1183,90 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
                 }
             );
 
-            TypeId ctorTy =
-                arena->addType(FunctionType{arena->addTypePack({builtinTypes->unknownType, ctorArgTy}), arena->addTypePack({classInstanceTy})});
+            std::vector<GenericTypeDefinition> classTypeParams;
+            std::vector<GenericTypePackDefinition> classTypePackParams;
+            if (FFlag::LuauBetterUserDefinedClasses && FFlag::LuauGenericNominals)
+            {
+                for (const auto& [name, gen] : createGenerics(defnScope, classDecl->generics, /* useCache */ true, /* addTypes */ false))
+                    classTypeParams.push_back(gen);
+                for (const auto& [name, genPack] : createGenericPacks(defnScope, classDecl->genericPacks, /* useCache */ true, /* addTypes */ false))
+                    classTypePackParams.push_back(genPack);
+
+                // Methods implicitly take `self`, typed as the bare class instance type
+                // (classInstanceTy). For a generic class, `self` needs to be `Box<T>` (applied to
+                // the class's own generics), not the bare, unparameterized `Box` -- otherwise
+                // calling a method on `Box<number>` fails to match against `self`, since neither
+                // side would look like the other nominally. See the equivalent handling for
+                // `declare extern type` above.
+                ExternType* classInstanceEtv = getMutable<ExternType>(classInstanceTy);
+                for (const GenericTypeDefinition& param : classTypeParams)
+                    classInstanceEtv->instantiatedTypeParams.push_back(param.ty);
+                for (const GenericTypePackDefinition& param : classTypePackParams)
+                    classInstanceEtv->instantiatedTypePackParams.push_back(param.tp);
+                classInstanceEtv->hasUnresolvedGenerics =
+                    !classInstanceEtv->instantiatedTypeParams.empty() || !classInstanceEtv->instantiatedTypePackParams.empty();
+            }
+
+            bool hasCustomInit = false;
+            for (const auto& member : classDecl->members)
+            {
+                if (const auto* method = member.get_if<AstClassMethod>(); method && method->functionName == "__init")
+                {
+                    hasCustomInit = true;
+                    break;
+                }
+            }
+
+            // If the class defines a custom `__init`, the constructor's real
+            // signature isn't known until `__init`'s own signature has been
+            // checked (see the `AstClassMethod` visitor below), so we leave
+            // this blocked for now.
+            TypeId ctorTy;
+            if (hasCustomInit)
+            {
+                ctorTy = arena->addType(BlockedType{});
+            }
+            else
+            {
+                std::vector<TypeId> podCtorGenerics;
+                std::vector<TypePackId> podCtorGenericPacks;
+                for (const GenericTypeDefinition& param : classTypeParams)
+                    podCtorGenerics.push_back(param.ty);
+                for (const GenericTypePackDefinition& param : classTypePackParams)
+                    podCtorGenericPacks.push_back(param.tp);
+
+                // Classes with no members can be constructed either with no arguments (`Empty()`)
+                // or with an empty argument table (`Empty {}`); make the argument optional so
+                // both call shapes typecheck.
+                TypeId ctorArgTyForCall = ctorArgTable->props.empty() ? makeOption(builtinTypes, *arena, ctorArgTy) : ctorArgTy;
+                TypePackId ctorArgsPack = arena->addTypePack({builtinTypes->unknownType, ctorArgTyForCall});
+
+                ctorTy = arena->addType(FunctionType{
+                    podCtorGenerics,
+                    podCtorGenericPacks,
+                    ctorArgsPack,
+                    arena->addTypePack({classInstanceTy}),
+                    /* defn */ std::nullopt,
+                    /* hasSelf */ true
+                });
+
+                // The default POD constructor is a real function like any other, so it should be
+                // directly callable as `object:__init(...)`/`Class.__init(...)`, just like a
+                // user-defined `__init` is.
+                TypeId initTy = arena->addType(FunctionType{
+                    std::move(podCtorGenerics),
+                    std::move(podCtorGenericPacks),
+                    arena->addTypePack({classInstanceTy, ctorArgTyForCall}),
+                    arena->addTypePack({}),
+                    /* defn */ std::nullopt,
+                    /* hasSelf */ true
+                });
+                Property initProp = Property::readonly(initTy);
+                initProp.location = classDecl->location;
+                if (ExternType* classInstanceEtv = getMutable<ExternType>(classInstanceTy))
+                    classInstanceEtv->props["__init"] = initProp;
+                staticProps["__init"] = initProp;
+            }
 
             TypeId metatableTy = arena->addType(
                 TableType{TableType::Props{{"__call", Property::readonly(ctorTy)}}, std::nullopt, TypeLevel{}, scope.get(), TableState::Sealed}
@@ -1186,11 +1288,15 @@ void ConstraintGenerator::prototypeTypeDefinitions(const ScopePtr& scope, AstSta
             emplaceType<BoundType>(asMutable(theTy), externTy);
 
             if (classDecl->exported)
-                scope->exportedTypeBindings[classDecl->name->name.value] = TypeFun{{}, {}, classInstanceTy, classDecl->location};
+                scope->exportedTypeBindings[classDecl->name->name.value] =
+                    TypeFun{classTypeParams, classTypePackParams, classInstanceTy, classDecl->location};
             else
-                scope->privateTypeBindings[classDecl->name->name.value] = TypeFun{{}, {}, classInstanceTy, classDecl->location};
+                scope->privateTypeBindings[classDecl->name->name.value] =
+                    TypeFun{classTypeParams, classTypePackParams, classInstanceTy, classDecl->location};
 
-            classDeclRecords[classDecl->name] = std::make_unique<ClassDeclRecord>(ClassDeclRecord{classInstanceTy, std::move(memberTypes)});
+            classDeclRecords[classDecl->name] = std::make_unique<ClassDeclRecord>(
+                ClassDeclRecord{classInstanceTy, std::move(memberTypes), ctorTy, std::move(classTypeParams), std::move(classTypePackParams)}
+            );
         }
     }
 
@@ -2558,6 +2664,32 @@ ControlFlow ConstraintGenerator::visit(const ScopePtr& scope, AstStatClass* stat
 
     auto classDeclRecord = classDeclRecordPtr->get();
 
+    // Property and method type annotations are resolved against the class's own definition scope
+    // (rather than the enclosing scope), so that references to the class's own generics (e.g. the
+    // `T` in `class Box<T> ... end`) resolve to these type-level generics.
+    ScopePtr bodyScope = scope;
+    if (FFlag::LuauBetterUserDefinedClasses && FFlag::LuauGenericNominals)
+    {
+        if (ScopePtr* defnScopePtr = astClassDefiningScopes.find(statClass))
+            bodyScope = *defnScopePtr;
+
+        LUAU_ASSERT(statClass->generics.size == classDeclRecord->typeParams.size());
+        for (size_t i = 0; i < statClass->generics.size; ++i)
+        {
+            AstGenericType* astTy = statClass->generics.data[i];
+            const GenericTypeDefinition& param = classDeclRecord->typeParams[i];
+            bodyScope->privateTypeBindings[astTy->name.value] = TypeFun{param.ty};
+        }
+
+        LUAU_ASSERT(statClass->genericPacks.size == classDeclRecord->typePackParams.size());
+        for (size_t i = 0; i < statClass->genericPacks.size; ++i)
+        {
+            AstGenericTypePack* astPack = statClass->genericPacks.data[i];
+            const GenericTypePackDefinition& param = classDeclRecord->typePackParams[i];
+            bodyScope->privateTypePackBindings[astPack->name.value] = param.tp;
+        }
+    }
+
     for (const auto& member : statClass->members)
     {
         Luau::visit(
@@ -2575,7 +2707,7 @@ ControlFlow ConstraintGenerator::visit(const ScopePtr& scope, AstStatClass* stat
                     if (!is<BlockedType>(blockedTy))
                         return;
 
-                    auto target = classProp.ty ? resolveType(scope, classProp.ty, false) : builtinTypes->anyType;
+                    auto target = classProp.ty ? resolveType(bodyScope, classProp.ty, false) : builtinTypes->anyType;
                     emplaceType<BoundType>(asMutable(blockedTy), target);
                 },
                 [&](const AstClassMethod& method)
@@ -2594,12 +2726,60 @@ ControlFlow ConstraintGenerator::visit(const ScopePtr& scope, AstStatClass* stat
                     if (!is<BlockedType>(functionType))
                         return;
 
-                    FunctionSignature sig =
-                        checkFunctionSignature(scope, classDeclRecord, method.function, /* expectedType */ std::nullopt, method.function->location);
+                    FunctionSignature sig = checkFunctionSignature(
+                        bodyScope, classDeclRecord, method.function, /* expectedType */ std::nullopt, method.function->location
+                    );
 
                     Checkpoint start = checkpoint(this);
                     checkFunctionBody(sig.bodyScope, method.function);
                     Checkpoint end = checkpoint(this);
+
+                    if (method.functionName == "__init")
+                    {
+                        if (FFlag::DebugLuauUserDefinedClasses && FFlag::LuauBetterUserDefinedClasses)
+                        {
+                            if (ExternType* classInstanceEtv = getMutable<ExternType>(follow(classDeclRecord->ty)))
+                                classInstanceEtv->initLocation = method.function->location;
+                        }
+
+                        if (const FunctionType* initSig = get<FunctionType>(follow(sig.signature)); initSig && is<BlockedType>(follow(classDeclRecord->ctorTy)))
+                        {
+                            auto [argHead, argTail] = flatten(initSig->argTypes);
+
+                            std::vector<TypeId> ctorArgs;
+                            ctorArgs.push_back(builtinTypes->unknownType);
+                            if (argHead.size() > 1)
+                                ctorArgs.insert(ctorArgs.end(), argHead.begin() + 1, argHead.end());
+
+                            TypePackId ctorArgsPack =
+                                argTail ? arena->addTypePack(std::move(ctorArgs), *argTail) : arena->addTypePack(std::move(ctorArgs));
+
+                            std::vector<TypeId> ctorGenerics;
+                            std::vector<TypePackId> ctorGenericPacks;
+                            for (const GenericTypeDefinition& param : classDeclRecord->typeParams)
+                                ctorGenerics.push_back(param.ty);
+                            for (const GenericTypePackDefinition& param : classDeclRecord->typePackParams)
+                                ctorGenericPacks.push_back(param.tp);
+
+                            TypeId newCtorTy = arena->addType(FunctionType{
+                                std::move(ctorGenerics),
+                                std::move(ctorGenericPacks),
+                                ctorArgsPack,
+                                arena->addTypePack({classDeclRecord->ty}),
+                                /* defn */ std::nullopt,
+                                /* hasSelf */ true
+                            });
+
+                            // Preserve `__init`'s parameter names (e.g. `name`, `age`) on the
+                            // synthesized constructor type, so tooling that prints the
+                            // constructor's signature (e.g. hover) shows `Cat(name: string, age:
+                            // number)` rather than unnamed parameters.
+                            if (FunctionType* newCtorFtv = getMutable<FunctionType>(newCtorTy))
+                                newCtorFtv->argNames = initSig->argNames;
+
+                            emplaceType<BoundType>(asMutable(follow(classDeclRecord->ctorTy)), newCtorTy);
+                        }
+                    }
 
                     NotNull<Scope> constraintScope{sig.signatureScope ? sig.signatureScope.get() : sig.bodyScope.get()};
                     std::unique_ptr<Constraint> c = std::make_unique<Constraint>(
@@ -2702,6 +2882,51 @@ InferencePack ConstraintGenerator::checkPack(
     return result;
 }
 
+// If `declaredParamTy` is exactly `genericTy`, the concrete argument type at that position
+// resolves the generic directly. If `declaredParamTy` is `{genericTy}` (an array of the
+// generic), the concrete argument's own array element type resolves the generic. This covers
+// the common `f<V>(container: {V}, value: V)` shape (e.g. `table.insert`) so that a later
+// argument's expected type can be refined using an earlier, already-checked sibling argument.
+static std::optional<TypeId> tryResolveGenericFromArrayArg(TypeId genericTy, TypeId declaredParamTy, TypeId concreteArgTy)
+{
+    declaredParamTy = follow(declaredParamTy);
+    concreteArgTy = follow(concreteArgTy);
+
+    if (declaredParamTy == genericTy)
+        return concreteArgTy;
+
+    if (const TableType* declaredTable = get<TableType>(declaredParamTy))
+    {
+        if (declaredTable->indexer && follow(declaredTable->indexer->indexResultType) == genericTy)
+        {
+            if (const TableType* concreteTable = get<TableType>(concreteArgTy))
+            {
+                if (concreteTable->indexer)
+                    return concreteTable->indexer->indexResultType;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+// True if `ty` is itself a bare generic, or a union containing one. Used to detect when the
+// coarse, syntax-directed expected type for a call argument (computed without knowledge of
+// sibling arguments) is uninformative because it still mentions an unresolved generic.
+static bool isOrContainsBareGeneric(TypeId ty)
+{
+    ty = follow(ty);
+    if (get<GenericType>(ty))
+        return true;
+    if (auto utv = get<UnionType>(ty))
+    {
+        for (TypeId opt : utv)
+            if (get<GenericType>(follow(opt)))
+                return true;
+    }
+    return false;
+}
+
 InferencePack ConstraintGenerator::checkPack(const ScopePtr& scope, AstExprCall* call, std::optional<TypeId> expectedType)
 {
     Checkpoint funcBeginCheckpoint = checkpoint(this);
@@ -2796,6 +3021,74 @@ InferencePack ConstraintGenerator::checkExprCall(
             {
                 expectedType = expectedTypesForCall[i];
             }
+
+            // Example: `table.insert<V>(t: {V}, value: V)`. `expectedType` for `value` is just
+            // the bare generic `V` here, since it was computed before any argument was checked.
+            // `t` (arg 0) has already been checked by this point though, so if it's a `{Foo}`,
+            // we can plug `Foo` in for `V` and get a real expected type for `value`.
+            if (i > 0 && expectedType && isOrContainsBareGeneric(*expectedType))
+            {
+                std::vector<TypeId> candidateOverloads;
+                TypeId followedFn = follow(fnType);
+                if (auto itv = get<IntersectionType>(followedFn))
+                {
+                    for (TypeId part : itv)
+                        candidateOverloads.push_back(part);
+                }
+                else
+                    candidateOverloads.push_back(followedFn);
+
+                std::vector<TypeId> resolvedOptions;
+                for (TypeId overload : candidateOverloads)
+                {
+                    const FunctionType* ov = get<FunctionType>(follow(overload));
+                    if (!ov || ov->generics.empty())
+                        continue;
+
+                    auto [ovArgsHead, ovArgsTail] = flatten(ov->argTypes);
+                    size_t ovStart = ov->hasSelf ? 1 : 0;
+                    size_t myPos = ovStart + i;
+                    if (myPos >= ovArgsHead.size())
+                        continue;
+
+                    TypeId declaredParamTy = follow(ovArgsHead[myPos]);
+
+                    bool isBareGenericParam = false;
+                    for (TypeId g : ov->generics)
+                    {
+                        if (follow(g) == declaredParamTy)
+                        {
+                            isBareGenericParam = true;
+                            break;
+                        }
+                    }
+                    if (!isBareGenericParam)
+                        continue;
+
+                    for (size_t j = ovStart; j < myPos; ++j)
+                    {
+                        size_t exprIndex = j - ovStart;
+                        if (exprIndex >= args.size())
+                            continue;
+
+                        if (auto resolvedTy = tryResolveGenericFromArrayArg(declaredParamTy, follow(ovArgsHead[j]), follow(args[exprIndex])))
+                        {
+                            resolvedOptions.push_back(*resolvedTy);
+                            break;
+                        }
+                    }
+                }
+
+                if (!resolvedOptions.empty())
+                {
+                    std::vector<TypeId> reduced = reduceUnion(resolvedOptions);
+                    if (reduced.size() == 1)
+                        expectedType = reduced[0];
+                    else if (!reduced.empty())
+                        expectedType = makeUnion(std::move(reduced));
+                }
+            }
+
             if (i == 0 && matchAssert(*call))
             {
                 InConditionalContext flipper{&typeContext};

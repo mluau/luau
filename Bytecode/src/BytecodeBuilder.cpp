@@ -977,13 +977,24 @@ void BytecodeBuilder::writeFunction(std::string& ss, uint32_t id, uint8_t flags,
 
 void BytecodeBuilder::writeClassShape(std::string& ss, const ClassShape& cs) const
 {
+    LUAU_ASSERT(cs.propertyFlags.size() == cs.propertyNames.size());
+    LUAU_ASSERT(cs.methodFlags.size() == cs.methodNames.size());
+
     writeVarInt(ss, cs.className);
     writeVarInt(ss, cs.propertyNames.size());
     writeVarInt(ss, cs.methodNames.size());
-    for (const auto propName : cs.propertyNames)
-        writeVarInt(ss, propName);
-    for (const auto methodName : cs.methodNames)
-        writeVarInt(ss, methodName);
+    // Each member's name and flags byte are written together (properties first, then methods,
+    // matching offset order) so the reader can fill in offsetToMember/memberFlags in one pass.
+    for (size_t i = 0; i < cs.propertyNames.size(); i++)
+    {
+        writeVarInt(ss, cs.propertyNames[i]);
+        writeVarInt(ss, cs.propertyFlags[i]);
+    }
+    for (size_t i = 0; i < cs.methodNames.size(); i++)
+    {
+        writeVarInt(ss, cs.methodNames[i]);
+        writeVarInt(ss, cs.methodFlags[i]);
+    }
 }
 
 int BytecodeBuilder::calcLinesSpan() const

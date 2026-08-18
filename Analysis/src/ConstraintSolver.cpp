@@ -1946,6 +1946,26 @@ bool ConstraintSolver::tryDispatch(const FunctionCheckConstraint& c, NotNull<con
 
     // FIXME: Bidirectional type checking of overloaded functions is not yet supported.
     const FunctionType* ftv = get<FunctionType>(fn);
+
+    // `fn` may not be a function directly but instead something callable via a `__call`
+    // metamethod (e.g. a class value being invoked as its own constructor: `Cat { ... }`).
+    // Unwrap that so bidirectional inference still pushes expected types into the arguments --
+    // see OverloadResolver::testFunctionOrCallMetamethod for the equivalent unwrapping done
+    // during actual call resolution.
+    bool viaCallMetamethod = false;
+    if (!ftv)
+    {
+        ErrorVec dummyErrors;
+        if (auto callMetamethod = findMetatableEntry(builtinTypes, dummyErrors, fn, "__call", constraint->location))
+        {
+            // The `__call` metamethod can itself be overloaded (an intersection); bidirectional
+            // inference doesn't support overloaded functions in general (see FIXME above), so we
+            // only handle the simple, non-overloaded case here.
+            ftv = get<FunctionType>(follow(*callMetamethod));
+            viaCallMetamethod = ftv != nullptr;
+        }
+    }
+
     if (!ftv)
         return true;
 
@@ -1977,17 +1997,25 @@ bool ConstraintSolver::tryDispatch(const FunctionCheckConstraint& c, NotNull<con
     // We don't attempt to perform bidirectional inference on the self type.
     const size_t typeOffset = c.callSite->self ? 1 : 0;
 
-    const std::vector<TypeId> expectedArgs = FFlag::LuauBidirectionalInferenceVariadics
-                                                 ? extendTypePack(*arena, builtinTypes, ftv->argTypes, c.callSite->args.size + typeOffset).head
-                                                 : flatten(ftv->argTypes).first;
+    // When calling through a `__call` metamethod, `ftv->argTypes` has an extra leading parameter
+    // for the callable value forwarded as its own "self" (see
+    // OverloadResolver::testFunctionOrCallMetamethod) that isn't present in `argsPack`/the AST
+    // call's arguments -- so skip it when indexing into `expectedArgs`, but not when indexing into
+    // `argPackHead` (which has no such extra entry).
+    const size_t expectedArgOffset = typeOffset + (viaCallMetamethod ? 1 : 0);
+
+    const std::vector<TypeId> expectedArgs =
+        FFlag::LuauBidirectionalInferenceVariadics
+            ? extendTypePack(*arena, builtinTypes, ftv->argTypes, c.callSite->args.size + expectedArgOffset).head
+            : flatten(ftv->argTypes).first;
     const std::vector<TypeId> argPackHead = flatten(argsPack).first;
 
     // TODO: Clip with LuauRemoveExtraSubtypingInstances
     Subtyping subtyping_DEPRECATED{builtinTypes, arena, normalizer, typeFunctionRuntime, NotNull{&iceReporter}};
 
-    for (size_t i = 0; i < c.callSite->args.size && i + typeOffset < expectedArgs.size() && i + typeOffset < argPackHead.size(); ++i)
+    for (size_t i = 0; i < c.callSite->args.size && i + expectedArgOffset < expectedArgs.size() && i + typeOffset < argPackHead.size(); ++i)
     {
-        TypeId expectedArgTy = follow(expectedArgs[i + typeOffset]);
+        TypeId expectedArgTy = follow(expectedArgs[i + expectedArgOffset]);
         AstExpr* expr = unwrapGroup(c.callSite->args.data[i]);
 
         PushTypeResult result = pushTypeInto(

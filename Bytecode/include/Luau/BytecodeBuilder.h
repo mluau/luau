@@ -53,6 +53,10 @@ public:
         int32_t className;
         std::vector<int32_t> propertyNames;
         std::vector<int32_t> methodNames;
+        // Parallel to propertyNames/methodNames; LUAU_CLASSMEMBER_* bits (see VM/src/lclass.h) for
+        // each member, in the same order (properties first, then methods).
+        std::vector<uint8_t> propertyFlags;
+        std::vector<uint8_t> methodFlags;
     };
 
     BytecodeBuilder(BytecodeEncoder* encoder = 0);

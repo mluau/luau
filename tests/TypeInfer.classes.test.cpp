@@ -10,6 +10,8 @@
 using namespace Luau;
 
 LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
+LUAU_FASTFLAG(LuauBetterUserDefinedClasses)
+LUAU_FASTFLAG(LuauGenericNominals)
 LUAU_FASTFLAG(LuauAllowGlobalDeclarationToBeCalledClass);
 LUAU_FASTFLAG(LuauIntegerType2)
 LUAU_FASTFLAG(LuauExportValueSyntax)
@@ -188,6 +190,289 @@ local p = Point
     CHECK(cobjMetaProps.find("__call") != cobjmeta->props.end());
 }
 
+TEST_CASE_FIXTURE(ClassesFixture, "class_with_no_fields_can_be_constructed_with_no_arguments")
+{
+    auto result = check(R"(
+class Empty
+    function greet(self)
+        return "hi"
+    end
+end
+
+local e = Empty()
+)");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_with_fields_still_requires_argument_table")
+{
+    auto result = check(R"(
+class Person
+    public name
+    public age
+
+    function greet(self)
+        return self.name
+    end
+end
+
+local p = Person()
+)");
+
+    LUAU_REQUIRE_ERROR_COUNT(1, result);
+    CHECK(get<CountMismatch>(result.errors[0]));
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_custom_init_constructor_signature")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public name: string
+    public age: number
+
+    function __init(self, name: string, age: number)
+        self.name = name
+        self.age = age
+    end
+end
+
+local p = Thingy
+    )");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+
+    auto t = requireType("p");
+    auto et = get<ExternType>(t);
+    REQUIRE(et);
+    REQUIRE(et->metatable);
+
+    auto cobjmeta = get<TableType>(*et->metatable);
+    REQUIRE(cobjmeta);
+    auto callProp = cobjmeta->props.find("__call");
+    REQUIRE(callProp != cobjmeta->props.end());
+    REQUIRE(callProp->second.readTy);
+    CHECK_EQ("(unknown, string, number) -> Thingy", toString(*callProp->second.readTy));
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_custom_init_constructor_call_is_checked")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public name: string
+    public age: number
+
+    function __init(self, name: string, age: number)
+        self.name = name
+        self.age = age
+    end
+end
+
+local good = Thingy("hi", 5)
+local missingArgs = Thingy()
+local wrongTypes = Thingy(5, "hi")
+local wrongShape = Thingy({ name = "hi", age = 5 })
+    )");
+
+    LUAU_REQUIRE_ERROR_COUNT(5, result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_private_init_can_be_called_from_a_factory_function")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public const cat: string
+
+    private function __init(self, cat: string)
+        self.cat = cat
+    end
+
+    public function new(cat: string): Thingy
+        return Thingy(cat)
+    end
+end
+
+local thing = Thingy.new("meow")
+    )");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_private_init_cannot_be_called_directly_from_outside")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public const cat: string
+
+    private function __init(self, cat: string)
+        self.cat = cat
+    end
+
+    public function new(cat: string): Thingy
+        return Thingy(cat)
+    end
+end
+
+local thing = Thingy("meow")
+    )");
+
+    LUAU_REQUIRE_ERROR_COUNT(1, result);
+    auto err = get<PrivateConstructorAccess>(result.errors[0]);
+    REQUIRE(err);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_public_init_can_be_called_from_outside")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public cat: string
+
+    public function __init(self, cat: string)
+        self.cat = cat
+    end
+end
+
+local thing = Thingy("meow")
+    )");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_const_property_can_be_assigned_from_init")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public const name: string
+
+    function __init(self, name: string)
+        self.name = name
+    end
+end
+    )");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_const_property_cannot_be_assigned_from_other_methods")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public const name: string
+
+    function __init(self, name: string)
+        self.name = name
+    end
+
+    function rename(self, name: string)
+        self.name = name
+    end
+end
+    )");
+
+    LUAU_REQUIRE_ERROR_COUNT(1, result);
+    auto err = get<ConstPropertyAssignment>(result.errors[0]);
+    REQUIRE(err);
+    CHECK_EQ("name", err->key);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_const_property_cannot_be_assigned_from_outside_the_class")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public const name: string
+
+    function __init(self, name: string)
+        self.name = name
+    end
+end
+
+local t = Thingy("hi")
+t.name = "bye"
+    )");
+
+    LUAU_REQUIRE_ERROR_COUNT(1, result);
+    auto err = get<ConstPropertyAssignment>(result.errors[0]);
+    REQUIRE(err);
+    CHECK_EQ("name", err->key);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_non_const_property_can_be_assigned_anywhere")
+{
+    ScopedFastFlag sff_LuauBetterUserDefinedClasses{FFlag::LuauBetterUserDefinedClasses, true};
+
+    auto result = check(R"(
+class Thingy
+    public name: string
+
+    function __init(self, name: string)
+        self.name = name
+    end
+
+    function rename(self, name: string)
+        self.name = name
+    end
+end
+
+local t = Thingy("hi")
+t.name = "bye"
+    )");
+
+    LUAU_REQUIRE_NO_ERRORS(result);
+}
+
+TEST_CASE_FIXTURE(ClassesFixture, "class_generic_parameter_is_inferred_from_constructor")
+{
+    ScopedFastFlag sffs[] = {
+        {FFlag::LuauBetterUserDefinedClasses, true},
+        {FFlag::LuauGenericNominals, true},
+    };
+
+    auto result = check(R"(
+class Box<T>
+    value: T
+
+    function __init(self, value: T)
+        self.value = value
+    end
+
+    function get(self): T
+        return self.value
+    end
+end
+
+local a = Box(5)
+local b: number = a:get()
+
+local c = Box("hi")
+local d: string = c:get()
+
+local e = Box(5)
+local f: string = e:get()
+    )");
+
+    LUAU_REQUIRE_ERROR_COUNT(1, result);
+    auto tm = get<TypeMismatch>(result.errors[0]);
+    REQUIRE(tm);
+    CHECK_EQ("string", toString(tm->wantedType));
+    CHECK_EQ("number", toString(tm->givenType));
+}
+
 TEST_CASE_FIXTURE(ClassesFixture, "isinstance_refines_unknown_value")
 {
     ScopedFastFlag sff{FFlag::LuauIntegerType2, true};
@@ -323,7 +608,7 @@ TEST_CASE_FIXTURE(ClassesFixture, "isinstance_refines_imported_class")
     fileResolver.source["game/B"] = R"(
         local A = require(game.A)
 
-        local x : unknown = (A.Point {} ) :: any
+        local x : unknown = A.Point({} :: any)
         if class.isinstance(x, A.Point) then
             local y = x
         end
@@ -348,7 +633,7 @@ TEST_CASE_FIXTURE(ClassesFixture, "isinstance_refines_imported_class_but_not_a_c
     fileResolver.source["game/B"] = R"(
         local A = require(game.A)
 
-        local x : unknown = (A.Point {} ) :: any
+        local x : unknown = A.Point({} :: any)
         if class.isinstance(x, A.notAPoint) then
             local y = x
         end

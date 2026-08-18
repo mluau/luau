@@ -502,4 +502,138 @@ expectpass("stack reallocation in creation", function()
     assert(f.z == 300)
 end)
 
+class UserWithInit
+    public first_name: string
+    public last_name: string
+    private ssn: string?
+
+    public function __init(self, first, last, ssn)
+        self.first_name = first
+        self.last_name = last
+        self.ssn = ssn
+    end
+
+    public function name(self): string
+        return self.first_name .. " " .. self.last_name
+    end
+
+    private function get_ssn(self): string
+        return self.ssn
+    end
+
+    public function reveal_ssn(self): string
+        -- Calling a private method from within another method of the same class is allowed.
+        return self:get_ssn()
+    end
+end
+
+expectpass("custom __init is used as the constructor", function()
+    local user = UserWithInit("Taz", "Parekh", "126-222-1123")
+    assert(user:name() == "Taz Parekh")
+    assert(user:reveal_ssn() == "126-222-1123")
+end)
+
+expectpass("custom __init can be called directly like a normal method", function()
+    local user = UserWithInit("a", "b", "c")
+    user:__init("Re", "Init", "999-99-9999")
+    assert(user:name() == "Re Init")
+    assert(user:reveal_ssn() == "999-99-9999")
+end)
+
+expectfail(
+    "private methods cannot be called from outside the class",
+    "'get_ssn' is a private member of 'UserWithInit', it cannot be accessed outside UserWithInit's class scope",
+    function()
+        local user = UserWithInit("Taz", "Parekh", "126-222-1123")
+        user:get_ssn()
+    end
+)
+
+class Token
+    public const value: string
+
+    public function __init(self, value: string)
+        self.value = value
+    end
+
+    public function reset(self, value: string)
+        -- `const` fields can only be assigned from within `__init`.
+        self.value = value
+    end
+end
+
+expectpass("const fields can be assigned from within __init", function()
+    local token = Token("abc")
+    assert(token.value == "abc")
+end)
+
+expectfail(
+    "const fields cannot be assigned outside of __init",
+    "'value' is a const member of 'Token' and cannot be assigned outside Token's '__init' constructor",
+    function()
+        local token = Token("abc")
+        token:reset("def")
+    end
+)
+
+expectfail(
+    "const fields cannot be assigned from outside the class either",
+    "'value' is a const member of 'Token' and cannot be assigned outside Token's '__init' constructor",
+    function()
+        local token = Token("abc")
+        token.value = "def"
+    end
+)
+
+class Thingy
+    public const cat: string
+
+    private function __init(self, cat: string)
+        self.cat = cat
+    end
+
+    public function new(cat: string): Thingy
+        return Thingy(cat)
+    end
+end
+
+expectpass("private __init can be called from a public factory function within the class", function()
+    local thing = Thingy.new("meow")
+    assert(thing.cat == "meow")
+end)
+
+expectfail(
+    "private __init cannot be called directly from outside the class",
+    "'__init' is a private member of 'Thingy', it cannot be accessed outside Thingy's class scope",
+    function()
+        Thingy("meow")
+    end
+)
+
+class PointNoInit
+    x: number
+    y: number
+end
+
+expectpass("classes without __init still use the default POD constructor", function()
+    local p = PointNoInit({ x = 3, y = 4 })
+    assert(p.x == 3 and p.y == 4)
+    local p2 = PointNoInit()
+    assert(not p2.x and not p2.y)
+end)
+
+expectpass("default __init can be called directly like a normal method", function()
+    local p = PointNoInit({ x = 3, y = 4 })
+    p:__init({ x = 5, y = 6 })
+    assert(p.x == 5 and p.y == 6)
+    p:__init()
+    assert(not p.x and not p.y)
+end)
+
+expectpass("default __init can be called directly on the class object", function()
+    local p = PointNoInit({ x = 3, y = 4 })
+    PointNoInit.__init(p, { x = 7, y = 8 })
+    assert(p.x == 7 and p.y == 8)
+end)
+
 return 'OK'

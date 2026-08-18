@@ -590,8 +590,21 @@ static int loadsafe(
                 uint32_t numProperties = readVarInt(data, size, offset);
                 uint32_t numMethods = readVarInt(data, size, offset);
                 uint32_t numMembers = numMethods + numProperties;
-                TString** offsetToMember = luaM_newarray(L, numMembers, TString*, L->activememcat);
-                LuaTable* membersToOffset = luaH_new(L, 0, numMembers);
+
+                TString* initName = luaS_newlstr(L, "__init", 6);
+                bool hasCustomInit = false;
+                size_t peekOffset = offset;
+                for (uint32_t idx = 0; idx < numMembers; idx++)
+                {
+                    uint32_t mid = readVarInt(data, size, peekOffset);
+                    readVarInt(data, size, peekOffset); // flags
+                    hasCustomInit |= tsvalue(&p->k[mid]) == initName;
+                }
+
+                uint32_t numMembersWithInit = hasCustomInit ? numMembers : numMembers + 1;
+                TString** offsetToMember = luaM_newarray(L, numMembersWithInit, TString*, L->activememcat);
+                uint8_t* memberFlags = luaM_newarray(L, numMembersWithInit, uint8_t, L->activememcat);
+                LuaTable* membersToOffset = luaH_new(L, 0, numMembersWithInit);
 
                 for (uint32_t idx = 0; idx < numMembers; idx++)
                 {
@@ -599,13 +612,25 @@ static int loadsafe(
                     TValue* memberName = &p->k[mid];
                     LUAU_ASSERT(ttisstring(memberName));
                     offsetToMember[idx] = tsvalue(memberName);
+                    memberFlags[idx] = uint8_t(readVarInt(data, size, offset));
                     TValue* val = luaH_setstr(L, membersToOffset, tsvalue(memberName));
                     setnvalue(val, idx);
                 }
 
+                if (!hasCustomInit)
+                {
+                    offsetToMember[numMembers] = initName;
+                    memberFlags[numMembers] = 0; // the default constructor is always public
+                    TValue* val = luaH_setstr(L, membersToOffset, initName);
+                    setnvalue(val, numMembers);
+                    numMethods += 1;
+                }
+
                 membersToOffset->readonly = true;
 
-                LuauClass* lco = luaR_newclass(L, tsvalue(classname), membersToOffset, offsetToMember, numProperties, numMethods);
+                LuauClass* lco = luaR_newclass(L, tsvalue(classname), membersToOffset, offsetToMember, memberFlags, numProperties, numMethods);
+                if (!hasCustomInit)
+                    luaR_adddefaultinit(L, lco);
                 setclassvalue(L, &p->k[j], lco);
                 break;
             }

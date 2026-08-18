@@ -437,24 +437,24 @@ static void traversestack(global_State* g, lua_State* l)
     }
 }
 
-static void traverseclass(global_State* g, LuauClass* classobject)
+static void traverseclass(global_State* g, LuauClass* classdef)
 {
-    markobject(g, classobject->name);
-    markobject(g, classobject->memberstooffset);
-    for (uint32_t i = 0; i < classobject->numberofallmembers; i++)
-        markobject(g, classobject->offsettomember[i]);
-    for (uint32_t i = 0; i < classobject->numberofallmembers - classobject->numberofinstancemembers; i++)
-        markvalue(g, &classobject->staticmembers[i]);
-    markobject(g, classobject->metatable);
-    if (classobject->instancemetatable)
-        markobject(g, classobject->instancemetatable);
+    markobject(g, classdef->name);
+    markobject(g, classdef->memberstooffset);
+    for (uint32_t i = 0; i < classdef->numberofallmembers; i++)
+        markobject(g, classdef->offsettomember[i]);
+    for (uint32_t i = 0; i < classdef->numberofallmembers - classdef->numberofinstancemembers; i++)
+        markvalue(g, &classdef->staticmembers[i]);
+    markobject(g, classdef->metatable);
+    if (classdef->instancemetatable)
+        markobject(g, classdef->instancemetatable);
 }
 
-static void traverseobject(global_State* g, LuauObject* classinst)
+static void traverseobject(global_State* g, LuauObject* object)
 {
-    markobject(g, classinst->lclass);
-    for (uint32_t i = 0; i < classinst->numberofmembers; i++)
-        markvalue(g, &classinst->members[i]);
+    markobject(g, object->lclass);
+    for (uint32_t i = 0; i < object->numberofmembers; i++)
+        markvalue(g, &object->members[i]);
 }
 
 static void clearstack(lua_State* l)
@@ -575,25 +575,25 @@ static size_t propagatemark(global_State* g)
     }
     case LUA_TCLASS:
     {
-        LuauClass* classobject = gco2class(o);
-        g->gray = classobject->gclist;
-        traverseclass(g, classobject);
+        LuauClass* classdef = gco2class(o);
+        g->gray = classdef->gclist;
+        traverseclass(g, classdef);
         // We've traversed the "object" itself ...
         return sizeof(LuauClass) +
                // ... plus the method closures, each a `TValue` wide ...
-               ((classobject->numberofallmembers - classobject->numberofinstancemembers) * sizeof(TValue)) +
+               ((classdef->numberofallmembers - classdef->numberofinstancemembers) * sizeof(TValue)) +
                // ... plus a string pointer for each method or property, each a pointer wide.
-               (classobject->numberofallmembers * sizeof(TString*));
+               (classdef->numberofallmembers * sizeof(TString*));
     }
     case LUA_TOBJECT:
     {
-        LuauObject* classinst = gco2object(o);
-        g->gray = classinst->gclist;
-        traverseobject(g, classinst);
+        LuauObject* object = gco2object(o);
+        g->gray = object->gclist;
+        traverseobject(g, object);
         // We've traversed the instance ...
         return sizeof(LuauObject) +
                // ... plus all of the instance fields.
-               classinst->numberofmembers * sizeof(TValue);
+               object->numberofmembers * sizeof(TValue);
     }
     default:
         LUAU_ASSERT(0);

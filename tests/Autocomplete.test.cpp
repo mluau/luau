@@ -18,6 +18,8 @@
 LUAU_DYNAMIC_FASTINT(LuauSubtypingRecursionLimit)
 
 LUAU_FASTINT(LuauTypeInferRecursionLimit)
+LUAU_FASTFLAG(DebugLuauUserDefinedClasses)
+LUAU_FASTFLAG(LuauBetterUserDefinedClasses)
 LUAU_FASTFLAG(LuauAutocompleteFunctionArglistSuggestion)
 LUAU_FASTFLAG(LuauAutocompleteMetatableInheritance)
 LUAU_FASTFLAG(LuauCheckTypeForDeprecated)
@@ -1019,6 +1021,61 @@ TEST_CASE_FIXTURE(ACFixture, "autocomplete_end_with_lambda")
     auto ac = autocomplete('1');
     CHECK_EQ(ac.entryMap.count("end"), 1);
     CHECK_EQ(ac.context, AutocompleteContext::Statement);
+}
+
+TEST_CASE_FIXTURE(ACFixture, "autocomplete_end_inside_class_method")
+{
+    ScopedFastFlag sff{FFlag::DebugLuauUserDefinedClasses, true};
+
+    check(R"(
+        class Foo
+            function bar(self)
+                if true then  @1
+            end
+        end
+    )");
+
+    auto ac = autocomplete('1');
+    CHECK_EQ(ac.entryMap.count("end"), 1);
+}
+
+TEST_CASE_FIXTURE(ACFixture, "autocomplete_class_member_position_offers_qualifiers")
+{
+    ScopedFastFlag sffs[] = {
+        {FFlag::DebugLuauUserDefinedClasses, true},
+        {FFlag::LuauBetterUserDefinedClasses, true},
+    };
+
+    check(R"(
+        class Foo
+            @1
+        end
+    )");
+
+    auto ac = autocomplete('1');
+    CHECK_EQ(ac.entryMap.count("public"), 1);
+    CHECK_EQ(ac.entryMap.count("private"), 1);
+    CHECK_EQ(ac.entryMap.count("function"), 1);
+    CHECK_EQ(ac.entryMap.count("if"), 0);
+    CHECK_EQ(ac.entryMap.count("local"), 0);
+}
+
+TEST_CASE_FIXTURE(ACFixture, "autocomplete_class_member_position_hides_private_without_flag")
+{
+    ScopedFastFlag sffs[] = {
+        {FFlag::DebugLuauUserDefinedClasses, true},
+        {FFlag::LuauBetterUserDefinedClasses, false},
+    };
+
+    check(R"(
+        class Foo
+            @1
+        end
+    )");
+
+    auto ac = autocomplete('1');
+    CHECK_EQ(ac.entryMap.count("public"), 1);
+    CHECK_EQ(ac.entryMap.count("private"), 0);
 }
 
 TEST_CASE_FIXTURE(ACFixture, "autocomplete_end_of_do_block")

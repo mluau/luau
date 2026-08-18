@@ -991,11 +991,20 @@ AstStatDeclareFunction::AstStatDeclareFunction(
 {
 }
 
-AstStatClass::AstStatClass(const Location& location, AstLocal* name, AstArray<AstClassMember> members, bool exported)
+AstStatClass::AstStatClass(
+    const Location& location,
+    AstLocal* name,
+    AstArray<AstClassMember> members,
+    bool exported,
+    const AstArray<AstGenericType*>& generics,
+    const AstArray<AstGenericTypePack*>& genericPacks
+)
     : AstStat(ClassIndex(), location)
     , name(name)
     , members(members)
     , exported(exported)
+    , generics(generics)
+    , genericPacks(genericPacks)
 {
     LUAU_ASSERT(FFlag::DebugLuauUserDefinedClasses);
 }

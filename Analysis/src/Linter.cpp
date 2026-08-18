@@ -613,6 +613,41 @@ private:
 
         return true;
     }
+
+    bool visit(AstStatClass* node) override
+    {
+        for (size_t i = 1; i < node->members.size; ++i)
+        {
+            Location last = Luau::visit([](auto&& member) -> Location
+                { return member.nameLocation; }, node->members.data[i - 1]);
+            Location location = Luau::visit([](auto&& member) -> Location
+                { return member.nameLocation; }, node->members.data[i]);
+
+            if (location.begin.line != last.end.line)
+                continue;
+
+            if (location.begin.line == lastLine)
+                continue;
+
+            bool lastHasSemicolon =
+                Luau::visit([](auto&& member) -> bool
+                    { return member.hasSemicolon; }, node->members.data[i - 1]);
+
+            if (lastHasSemicolon)
+                continue;
+
+            emitWarning(
+                *context,
+                LintWarning::Code_SameLineStatement,
+                location,
+                "Each class field should be on its own line; separate fields with a semicolon to silence"
+            );
+
+            lastLine = location.begin.line;
+        }
+
+        return true;
+    }
 };
 
 class LintMultiLineStatement : AstVisitor

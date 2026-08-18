@@ -1593,6 +1593,13 @@ struct Compiler
                         int propNameCid = bytecode.addConstantString(sref(prop.name));
                         checkConstant(propNameCid, prop.nameLocation);
                         shape.propertyNames.emplace_back(propNameCid);
+
+                        uint8_t flags = 0;
+                        if (prop.visibility == AstClassMemberVisibility::Private)
+                            flags |= LBC_CLASSMEMBER_PRIVATE;
+                        if (prop.isConst)
+                            flags |= LBC_CLASSMEMBER_CONST;
+                        shape.propertyFlags.emplace_back(flags);
                     },
                     [&](const AstClassMethod& method)
                     {
@@ -1609,6 +1616,12 @@ struct Compiler
                         int methodNameCid = bytecode.addConstantString(sref(method.functionName));
                         checkConstant(methodNameCid, method.function->location);
                         shape.methodNames.emplace_back(methodNameCid);
+
+                        uint8_t flags = 0;
+                        if (method.visibility == AstClassMemberVisibility::Private)
+                            flags |= LBC_CLASSMEMBER_PRIVATE;
+                        shape.methodFlags.emplace_back(flags);
+
                         bytecode.emitABC(LOP_NEWCLASSMEMBER, dest, 0, temp);
                         bytecode.emitAux(methodNameCid);
                     }

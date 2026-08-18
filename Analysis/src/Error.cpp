@@ -556,7 +556,7 @@ struct ErrorConverter
             s += "'" + e.properties[i] + "'";
         }
 
-        s += afterFieldList + " found in type '" + toString(e.subType) + "' from expected type '" + toString(e.superType) + "'";
+        s += afterFieldList + " found in type\n  '" + toString(e.subType) + "'\nexpected type:\n  '" + toString(e.superType) + "'";
 
         return s;
     }
@@ -849,6 +849,23 @@ struct ErrorConverter
         return "<Invalid PropertyAccessViolation>";
     }
 
+    std::string operator()(const PrivatePropertyAccess& e) const
+    {
+        const std::string stringKey = isIdentifier(e.key) ? e.key : "\"" + e.key + "\"";
+        return "Property " + stringKey + " is private; accessing it here will result in a runtime error";
+    }
+
+    std::string operator()(const ConstPropertyAssignment& e) const
+    {
+        const std::string stringKey = isIdentifier(e.key) ? e.key : "\"" + e.key + "\"";
+        return "Property " + stringKey + " is constant and may only be assigned to from within the class's '__init' constructor";
+    }
+
+    std::string operator()(const PrivateConstructorAccess& e) const
+    {
+        return "This class's constructor is private; call a factory function instead of calling the constructor directly";
+    }
+
     std::string operator()(const CheckedFunctionIncorrectArgs& e) const
     {
 
@@ -1138,6 +1155,21 @@ bool UnknownProperty::operator==(const UnknownProperty& rhs) const
 bool PropertyAccessViolation::operator==(const PropertyAccessViolation& rhs) const
 {
     return *table == *rhs.table && key == rhs.key && context == rhs.context;
+}
+
+bool PrivatePropertyAccess::operator==(const PrivatePropertyAccess& rhs) const
+{
+    return *table == *rhs.table && key == rhs.key;
+}
+
+bool ConstPropertyAssignment::operator==(const ConstPropertyAssignment& rhs) const
+{
+    return *table == *rhs.table && key == rhs.key;
+}
+
+bool PrivateConstructorAccess::operator==(const PrivateConstructorAccess& rhs) const
+{
+    return *classTy == *rhs.classTy;
 }
 
 bool NotATable::operator==(const NotATable& rhs) const
@@ -1683,6 +1715,12 @@ void copyError(T& e, TypeArena& destArena, CloneState& cloneState)
     }
     else if constexpr (std::is_same_v<T, PropertyAccessViolation>)
         e.table = clone(e.table);
+    else if constexpr (std::is_same_v<T, PrivatePropertyAccess>)
+        e.table = clone(e.table);
+    else if constexpr (std::is_same_v<T, ConstPropertyAssignment>)
+        e.table = clone(e.table);
+    else if constexpr (std::is_same_v<T, PrivateConstructorAccess>)
+        e.classTy = clone(e.classTy);
     else if constexpr (std::is_same_v<T, CheckedFunctionIncorrectArgs>)
     {
     }

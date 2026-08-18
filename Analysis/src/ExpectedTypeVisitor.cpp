@@ -172,8 +172,22 @@ bool ExpectedTypeVisitor::visit(AstExprIndexExpr* expr)
 bool ExpectedTypeVisitor::visit(AstExprCall* expr)
 {
     TypeId* ty = astOverloadResolvedTypes->find(expr);
-    if (!ty)
+
+    // If the resolved call type came from `astOverloadResolvedTypes` rather than the callee
+    // expression's own type, and the callee's own type isn't itself a function, then this call
+    // was resolved through a `__call` metamethod (e.g. a class value invoked as its own
+    // constructor: `Cat { ... }`). Such calls forward the callee as an implicit leading argument
+    // (see OverloadResolver::testFunctionOrCallMetamethod) that doesn't correspond to any AST
+    // argument, so we need to skip it below the same way we skip an explicit `self` argument.
+    bool viaCallMetamethod = false;
+    if (ty)
+    {
+        if (TypeId* calleeTy = astTypes->find(expr->func))
+            viaCallMetamethod = get<FunctionType>(follow(*calleeTy)) == nullptr;
+    }
+    else
         ty = astTypes->find(expr->func);
+
     if (!ty)
         return true;
 
@@ -194,6 +208,9 @@ bool ExpectedTypeVisitor::visit(AstExprCall* expr)
         // pack will be the type of `self`, so we just skip that.
         it++;
     }
+
+    if (viaCallMetamethod && it != end(ftv->argTypes))
+        it++;
 
     while (idx < expr->args.size && it != end(ftv->argTypes))
     {

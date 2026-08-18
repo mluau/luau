@@ -1196,7 +1196,7 @@ TEST_CASE_FIXTURE(Fixture, "cli_50041_committing_txnlog_in_apollo_client_error")
             "'FieldSpecifier'"
             "\ncaused by:\n"
             "  Not all intersection parts are compatible.\n"
-            "extra field 'fieldName' found in type 'FieldSpecifier' from expected type '{ from: number? }'";
+            "extra field 'fieldName' found in type\n  'FieldSpecifier'\nexpected type:\n  '{ from: number? }'";
         CHECK_EQ(expected, toString(result.errors[0]));
     }
     else

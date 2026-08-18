@@ -67,6 +67,7 @@ LUAU_FASTFLAG(LuauCodegenFixBufferLenCheck)
 LUAU_FASTFLAG(LuauYieldIter2)
 LUAU_FASTFLAG(LuauCustomYieldablePcalls)
 LUAU_FASTFLAG(DebugLuauUserDefinedClassesRuntime)
+LUAU_FASTFLAG(LuauBetterUserDefinedClasses)
 LUAU_FASTFLAG(LuauExportValueSyntax)
 LUAU_FASTFLAG(LuauExportedClassIsNilWorkaround)
 LUAU_FASTFLAG(LuauAutoStack)
@@ -4299,6 +4300,7 @@ TEST_CASE("Classes")
     ScopedFastFlag sffs[] = {
         {FFlag::DebugLuauUserDefinedClasses, true},
         {FFlag::DebugLuauUserDefinedClassesRuntime, true},
+        {FFlag::LuauBetterUserDefinedClasses, true},
     };
 
     runConformance("classes.luau");

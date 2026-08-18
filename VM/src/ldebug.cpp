@@ -326,6 +326,18 @@ l_noret luaG_readonlyerror(lua_State* L)
     luaG_runerror(L, "attempt to modify a readonly table");
 }
 
+l_noret luaG_privateaccesserror(lua_State* L, const TValue* p2, const TString* className)
+{
+    const char* t1 = getstr(className);
+    luaG_runerrorL(L, "'%s' is a private member of '%s', it cannot be accessed outside %s's class scope", getstr(tsvalue(p2)), t1, t1);
+}
+
+l_noret luaG_constassignerror(lua_State* L, const TValue* p2, const TString* className)
+{
+    const char* t1 = getstr(className);
+    luaG_runerrorL(L, "'%s' is a const member of '%s' and cannot be assigned outside %s's '__init' constructor", getstr(tsvalue(p2)), t1, t1);
+}
+
 static void pusherror(lua_State* L, const char* msg)
 {
     CallInfo* ci = L->ci;

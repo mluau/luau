@@ -1922,6 +1922,15 @@ std::string toStringNamedFunction(const std::string& funcName, const FunctionTyp
             state.emit(", ");
         first = false;
 
+        // ftv takes a self parameter as the first argument, print it bare (no type) if specified in option
+        if (idx == 0 && ftv.hasSelf && opts.hideFunctionSelfArgumentType)
+        {
+            state.emit(idx < ftv.argNames.size() && ftv.argNames[idx] ? ftv.argNames[idx]->name : "self");
+            ++argPackIter;
+            ++idx;
+            continue;
+        }
+
         // We don't respect opts.functionTypeArguments
         if (idx < opts.namedFunctionOverrideArgNames.size())
         {

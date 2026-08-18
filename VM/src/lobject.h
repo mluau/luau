@@ -598,6 +598,33 @@ typedef struct LuauClass
     // instance or static members, creating class instances).
     uint32_t numberofallmembers;
 
+    // Set when this class defines a user `__init` method. When true, the
+    // class's constructor (`ClassName(...)`) calls `__init(self, ...)`
+    // instead of the default POD table-copy constructor.
+    bool hascustominit;
+
+    // The offset of `__init` in `staticmembers`, only meaningful when `hascustominit` is set.
+    // Used to find `__init`'s closure for the `const`-write brand check below.
+    uint32_t initoffset;
+
+    // Per-member attribute bits, indexed by the same offset as `offsettomember` (see
+    // LUAU_CLASSMEMBER_PRIVATE / LUAU_CLASSMEMBER_CONST in lclass.h). Owned by this class object;
+    // freed in luaR_freeclass.
+    uint8_t* memberflags;
+
+    // True if any entry in `memberflags` has LUAU_CLASSMEMBER_PRIVATE set. Lets the interpreter
+    // skip the private-access brand check entirely for classes with no private members, so public
+    // (the common case) access from outside the class costs nothing extra.
+    bool hasprivatemembers;
+
+    // True if any entry in `memberflags` has LUAU_CLASSMEMBER_CONST set. Same idea as
+    // `hasprivatemembers`, but for skipping the const-write check on SETTABLEKS.
+    bool hasconstmembers;
+
+    // Debug name of the constructor closure (e.g. "Foo() constructor"), shown
+    // in stack traces. Owned by this class object; freed in luaR_freeclass.
+    char* ctordebugname;
+
 } LuauClass;
 
 typedef struct LuauObject
